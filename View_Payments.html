@@ -1,0 +1,740 @@
+<!-- 4. ORDERS VIEW (รายการคำสั่งซื้อ & แป้นยิงออเดอร์สด) -->
+<section id="view-orders" class="view">
+    <!-- View Header -->
+    <div class="card-title-bar">
+        <div>
+            <h2 style="display:flex; align-items:center; gap:0.5rem; font-size:1.35rem; color:var(--text-main);">
+                📦 จัดการออเดอร์ & แป้นยิงสด (Live POS)
+            </h2>
+            <p style="color:var(--text-muted); font-size:0.88rem; margin-top:2px;">
+                บันทึกบิลด่วนขณะสตรีมสด คำนวณค่าส่งเหมาอัตโนมัติ และระบบฝากถุง เชื่อมต่อ Google Sheets สด 100%
+            </p>
+        </div>
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <button class="btn btn-outline" onclick="OrderModule.load(true)">🔄 รีเฟรชออเดอร์</button>
+            <button class="btn btn-primary" onclick="OrderModule.openModal()">+ เปิดบิลแบบละเอียด</button>
+        </div>
+    </div>
+
+    <!-- KPI Summary Cards -->
+    <div class="kpi-grid">
+        <div class="kpi-card kpi-pink">
+            <div class="kpi-label">🛒 ออเดอร์ทั้งหมด</div>
+            <div id="ord-kpi-total" class="kpi-value">0 บิล</div>
+        </div>
+        <div class="kpi-card kpi-green">
+            <div class="kpi-label">💰 ยอดขายรวม (บาท)</div>
+            <div id="ord-kpi-revenue" class="kpi-value" style="color:var(--success);">฿0</div>
+        </div>
+        <div class="kpi-card kpi-amber">
+            <div class="kpi-label">🛍️ ออเดอร์ฝากถุง</div>
+            <div id="ord-kpi-holding" class="kpi-value" style="color:var(--warning);">0 บิล</div>
+        </div>
+        <div class="kpi-card kpi-blue">
+            <div class="kpi-label">🚚 ส่งพัสดุสำเร็จ</div>
+            <div id="ord-kpi-shipped" class="kpi-value">0 บิล</div>
+        </div>
+    </div>
+
+    <!-- MAIN LIVE POS LAYOUT (Dual-pane on PC, Responsive stack on Mobile) -->
+    <div class="live-pos-split">
+        <!-- LEFT: ⚡ LIVE QUICK CF TERMINAL -->
+        <div class="quick-cf-card">
+            <div class="quick-cf-header">
+                <div class="quick-cf-title">
+                    <span style="font-size:1.3rem;">⚡</span>
+                    <span>แป้นยิงออเดอร์สด (Quick CF)</span>
+                </div>
+                <span class="live-badge-pulse">
+                    <span class="pulse-dot"></span> พร้อมยิงบิล
+                </span>
+            </div>
+
+            <form id="form-quick-cf" onsubmit="OrderModule.submitQuickCF(event)">
+                <!-- 1. TikTok Username Input -->
+                <div style="margin-bottom:0.75rem;">
+                    <label style="font-size:0.82rem; font-weight:700; color:var(--text-main); display:flex; justify-content:space-between;">
+                        <span>1. ชื่อ TikTok ของลูกค้า *</span>
+                        <span id="quick-cf-cust-badge" style="font-size:0.75rem; color:var(--brand-pink); font-weight:600;"></span>
+                    </label>
+                    <input type="text" id="quick-cf-tiktok" class="form-control" style="font-size:1rem; font-weight:700;" placeholder="เช่น @user_shopping" required oninput="OrderModule.onQuickTiktokInput(this.value)">
+                    <!-- Quick Customer Suggestion Chips -->
+                    <div id="quick-cf-recent-chips" style="display:flex; gap:4px; margin-top:6px; flex-wrap:wrap; max-height:55px; overflow-y:auto;">
+                        <!-- Auto-populated from recent orders -->
+                    </div>
+                </div>
+
+                <!-- 2. Quick Price Pills -->
+                <div style="margin-bottom:0.75rem;">
+                    <label style="font-size:0.82rem; font-weight:700; color:var(--text-main); display:block;">
+                        2. แตะเลือกราคาด่วน (หรือพิมพ์เอง)
+                    </label>
+                    <div class="price-pills-grid">
+                        <button type="button" class="btn-price-pill" onclick="OrderModule.quickSetPrice(35)">35฿</button>
+                        <button type="button" class="btn-price-pill" onclick="OrderModule.quickSetPrice(45)">45฿</button>
+                        <button type="button" class="btn-price-pill" onclick="OrderModule.quickSetPrice(50)">50฿</button>
+                        <button type="button" class="btn-price-pill" onclick="OrderModule.quickSetPrice(59)">59฿</button>
+                        <button type="button" class="btn-price-pill" onclick="OrderModule.quickSetPrice(69)">69฿</button>
+                        <button type="button" class="btn-price-pill" onclick="OrderModule.quickSetPrice(79)">79฿</button>
+                        <button type="button" class="btn-price-pill" onclick="OrderModule.quickSetPrice(99)">99฿</button>
+                        <button type="button" class="btn-price-pill" onclick="OrderModule.quickSetPrice(120)">120฿</button>
+                        <button type="button" class="btn-price-pill" onclick="OrderModule.quickSetPrice(150)">150฿</button>
+                    </div>
+                </div>
+
+                <!-- 3. Price & Item Description -->
+                <div style="display:grid; grid-template-columns:1fr 1.2fr; gap:0.5rem; margin-bottom:0.75rem;">
+                    <div>
+                        <label style="font-size:0.78rem; font-weight:700; color:var(--text-muted);">ราคาต่อชิ้น (฿)</label>
+                        <input type="number" id="quick-cf-price" class="form-control" style="font-weight:700; font-size:1rem;" value="45" required oninput="OrderModule.recalcQuickCF()">
+                    </div>
+                    <div>
+                        <label style="font-size:0.78rem; font-weight:700; color:var(--text-muted);">รายละเอียดเสื้อผ้า</label>
+                        <input type="text" id="quick-cf-desc" class="form-control" value="เสื้อ 45฿" placeholder="เช่น เสื้อขาว 01">
+                    </div>
+                </div>
+
+                <!-- 4. Quantity & Delivery / Bag Toggle -->
+                <div class="cf-row-qty-toggle" style="display:grid; grid-template-columns:1fr 1.4fr; gap:0.5rem; margin-bottom:0.85rem; align-items:center;">
+                    <div>
+                        <label style="font-size:0.78rem; font-weight:700; color:var(--text-muted);">จำนวนชิ้น</label>
+                        <div style="display:flex; align-items:center; gap:4px; margin-top:2px;">
+                            <button type="button" class="btn btn-outline" style="padding:0.4rem 0.65rem; font-weight:800;" onclick="OrderModule.quickAdjustQty(-1)">-</button>
+                            <input type="number" id="quick-cf-qty" class="form-control" style="text-align:center; font-weight:800; padding:0.4rem;" value="1" min="1" oninput="OrderModule.recalcQuickCF()">
+                            <button type="button" class="btn btn-outline" style="padding:0.4rem 0.65rem; font-weight:800;" onclick="OrderModule.quickAdjustQty(1)">+</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label style="font-size:0.78rem; font-weight:700; color:var(--text-muted);">การจัดส่ง / ฝากถุง</label>
+                        <div class="bag-toggle-group" style="margin-top:2px;">
+                            <button type="button" id="quick-toggle-ship" class="bag-toggle-btn active ship-now" onclick="OrderModule.quickToggleBag(false)">
+                                🚚 ส่งทันที
+                            </button>
+                            <button type="button" id="quick-toggle-bag" class="bag-toggle-btn holding-bag" onclick="OrderModule.quickToggleBag(true)">
+                                🛍️ ฝากถุง
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. Live Calculation Breakdown Bar -->
+                <div style="background:white; border:1px solid #FECDD3; border-radius:var(--radius-md); padding:0.65rem 0.85rem; margin-bottom:0.85rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.4rem;">
+                    <div style="font-size:0.82rem; color:var(--text-muted);">
+                        ค่าสินค้า: <span id="quick-cf-subtotal-text" style="font-weight:700; color:var(--text-main);">฿45</span> + 
+                        ค่าส่ง: <span id="quick-cf-shipping-text" style="font-weight:700; color:var(--text-main);">฿40</span>
+                    </div>
+                    <div style="text-align:right;">
+                        <span style="font-size:0.75rem; color:var(--text-muted); display:block;">ยอดสุทธิ</span>
+                        <span id="quick-cf-total-text" style="font-size:1.25rem; font-weight:800; color:#BE123C; font-family:'Plus Jakarta Sans',sans-serif;">฿85</span>
+                    </div>
+                </div>
+
+                <!-- 6. Submit Button -->
+                <button type="submit" id="btn-quick-cf-submit" class="btn-cf-submit">
+                    <span>⚡ บันทึกบิลด่วน</span>
+                    <span style="font-size:0.78rem; opacity:0.85; font-weight:normal;">(Enter)</span>
+                </button>
+            </form>
+        </div>
+
+        <!-- RIGHT: LIVE ORDERS FEED & FILTER TABLE -->
+        <div class="live-orders-container">
+            <!-- Filter Toolbar -->
+            <div class="card" style="padding:0.85rem 1.1rem; margin-bottom:1rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+                    <div style="display:flex; gap:0.5rem; align-items:center; flex:1 1 200px; min-width:0; max-width:100%; flex-wrap:wrap;">
+                        <input type="text" id="search-orders" class="form-control" style="flex:1; min-width:140px;" placeholder="🔍 ค้นหารหัสบิล, ชื่อ TikTok, ลูกค้า..." oninput="OrderModule.applyFilters()">
+                        <select id="filter-ord-status" class="form-control" style="width:145px; max-width:100%;" onchange="OrderModule.applyFilters()">
+                            <option value="all">สถานะทั้งหมด</option>
+                            <option value="Paid">ชำระแล้ว (Paid)</option>
+                            <option value="Pending">รอโอน (Pending)</option>
+                            <option value="Holding">ฝากถุง (Holding)</option>
+                            <option value="Cancelled">ยกเลิก (Cancelled)</option>
+                        </select>
+                    </div>
+                    <span id="ord-count-badge" class="badge badge-purple">กำลังโหลด...</span>
+                </div>
+            </div>
+
+            <!-- ORDERS TABLE / MOBILE CARDS CONTAINER -->
+            <div class="card" style="padding:0; overflow:hidden;">
+                <div class="data-table-container">
+                    <table class="custom-table">
+                        <thead>
+                            <tr>
+                                <th style="width:90px;">รหัสบิล</th>
+                                <th>เวลา</th>
+                                <th>ชื่อ TikTok / ลูกค้า</th>
+                                <th>รายการสินค้า</th>
+                                <th style="text-align:right;">ยอดสินค้า</th>
+                                <th style="text-align:right;">ค่าส่ง</th>
+                                <th style="text-align:right;">ยอดสุทธิ</th>
+                                <th style="text-align:center;">ประเภท</th>
+                                <th style="text-align:center;">สถานะ</th>
+                                <th style="text-align:center; width:110px;">จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-orders-body">
+                            <tr><td colspan="10" style="text-align:center; padding:2rem; color:var(--text-muted);">กำลังโหลดข้อมูลออเดอร์จาก Google Sheets... ⏳</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL ORDER (เปิดบิล/แก้ไขออเดอร์แบบละเอียด) -->
+    <div id="modal-order" class="modal-overlay" style="display:none;">
+        <div class="modal-content-box">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border-color); padding-bottom:0.75rem; margin-bottom:1rem;">
+                <h3 id="modal-order-title" style="color:var(--text-main); margin:0; font-size:1.15rem;">เปิดบิลคำสั่งซื้อใหม่</h3>
+                <button type="button" style="background:none; border:none; font-size:1.5rem; cursor:pointer; color:var(--text-muted);" onclick="OrderModule.closeModal()">&times;</button>
+            </div>
+            
+            <form id="form-order" onsubmit="OrderModule.saveOrder(event)">
+                <input type="hidden" id="ord-id">
+                
+                <!-- ข้อมูลลูกค้า -->
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; margin-bottom:0.75rem;">
+                    <div>
+                        <label style="font-size:0.8rem; font-weight:700;">ชื่อ TikTok (Username) *</label>
+                        <input type="text" id="ord-tiktok" class="form-control" required placeholder="เช่น @user_fashion" onchange="OrderModule.lookupCustomer(this.value)">
+                    </div>
+                    <div>
+                        <label style="font-size:0.8rem; font-weight:700;">ชื่อผู้รับ / ชื่อจริง</label>
+                        <input type="text" id="ord-name" class="form-control" placeholder="เช่น สมใจ ใจดี">
+                    </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; margin-bottom:0.75rem;">
+                    <div>
+                        <label style="font-size:0.8rem; font-weight:700;">เบอร์โทรศัพท์</label>
+                        <input type="text" id="ord-phone" class="form-control" placeholder="เช่น 0812345678">
+                    </div>
+                    <div>
+                        <label style="font-size:0.8rem; font-weight:700;">รหัสลูกค้า (CRM)</label>
+                        <input type="text" id="ord-customerId" class="form-control" placeholder="เช่น C-001 (ถ้ามี)">
+                    </div>
+                </div>
+
+                <!-- รายการเสื้อผ้าที่สั่ง -->
+                <div style="margin-bottom:0.75rem;">
+                    <label style="font-size:0.8rem; font-weight:700;">รายละเอียดสินค้าที่สั่ง *</label>
+                    <textarea id="ord-itemsDesc" class="form-control" rows="2" required placeholder="เช่น เสื้อเชิ้ต 45฿ x 1&#10;เดรสวินเทจ 59฿ x 1"></textarea>
+                </div>
+
+                <!-- คำนวณยอดเงิน & ค่าส่ง -->
+                <div style="background:#F8FAFC; border:1.5px solid var(--border-color); border-radius:var(--radius-md); padding:0.85rem; margin-bottom:0.85rem;">
+                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1.2fr; gap:0.5rem; align-items:center;">
+                        <div>
+                            <label style="font-size:0.78rem; font-weight:700;">ยอดสินค้า (บาท)</label>
+                            <input type="number" id="ord-subtotal" class="form-control" value="0" required oninput="OrderModule.recalculateTotal()">
+                        </div>
+                        <div>
+                            <label style="font-size:0.78rem; font-weight:700;">จำนวนตัว (ชิ้น)</label>
+                            <input type="number" id="ord-qty" class="form-control" value="1" min="1" oninput="OrderModule.autoCalculateShipping()">
+                        </div>
+                        <div>
+                            <label style="font-size:0.78rem; font-weight:700;">ค่าจัดส่ง (บาท)</label>
+                            <input type="number" id="ord-shippingFee" class="form-control" value="40" oninput="OrderModule.recalculateTotal()">
+                        </div>
+                        <div>
+                            <label style="font-size:0.78rem; font-weight:700; color:var(--brand-pink);">ยอดสุทธิ (บาท)</label>
+                            <input type="number" id="ord-total" class="form-control" style="font-weight:800; color:var(--brand-pink); font-size:1.1rem;" value="40" readonly>
+                        </div>
+                    </div>
+                    <small style="color:var(--text-muted); font-size:0.75rem; display:block; margin-top:5px;">
+                        * อัตราค่าจัดส่งเหมา: 5 ตัวแรก 40 บาท (ตัวที่ 6 ขึ้นไป +ตัวละ 5 บาท)
+                    </small>
+                </div>
+
+                <!-- การฝากถุง & สถานะ -->
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.5rem; margin-bottom:1rem;">
+                    <div>
+                        <label style="font-size:0.8rem; font-weight:700;">ตัวเลือกจัดส่ง / ฝากถุง</label>
+                        <select id="ord-isHoldingBag" class="form-control">
+                            <option value="false">🚚 ส่งทันทีรอบนี้</option>
+                            <option value="true">🛍️ ฝากถุงสะสมส่งเสาร์</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size:0.8rem; font-weight:700;">สถานะชำระเงิน</label>
+                        <select id="ord-status" class="form-control">
+                            <option value="Paid">ชำระแล้ว (Paid)</option>
+                            <option value="Pending">รอโอน (Pending)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size:0.8rem; font-weight:700;">สถานะพัสดุ</label>
+                        <select id="ord-shippingStatus" class="form-control">
+                            <option value="Waiting">รอดำเนินการ</option>
+                            <option value="Shipped">จัดส่งแล้ว</option>
+                            <option value="Holding">ฝากถุง</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="display:flex; justify-content:flex-end; gap:0.5rem; border-top:1px solid var(--border-color); padding-top:1rem;">
+                    <button type="button" class="btn btn-outline" onclick="OrderModule.closeModal()">ยกเลิก</button>
+                    <button type="submit" id="btn-save-ord" class="btn btn-primary">💾 บันทึกออเดอร์ลง Google Sheets</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</section>
+
+
+<script>
+/**
+ * Orders & Live Quick CF Controller - เชื่อมต่อ Google Sheets สด 100%
+ * รองรับการยิงออเดอร์สดขณะ Live (Fast POS) สำหรับทั้ง PC และมือถือ
+ */
+var OrderModuleClass = window.OrderModuleClass || class OrderModuleClass {
+    constructor() {
+        this.allOrders = [];
+        this.isHoldingBagQuick = false;
+        this.selectedCustomer = null;
+    }
+
+    getId(o) {
+        if (!o) return '-';
+        return String(o['รหัสออเดอร์'] || o['id'] || Object.values(o)[0] || '-').trim();
+    }
+
+    load(forceRefresh = false) {
+        const tbody = document.getElementById('table-orders-body');
+        if (!forceRefresh && this.allOrders && this.allOrders.length > 0) {
+            this.applyFilters();
+            this.populateRecentChips();
+            return;
+        }
+
+        if (tbody) tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:2rem; color:var(--text-muted);">กำลังโหลดข้อมูลออเดอร์จาก Google Sheets... ⏳</td></tr>';
+
+        google.script.run
+            .withSuccessHandler((res) => {
+                this.allOrders = (res && res.orders) ? res.orders : [];
+                this.applyFilters();
+                this.populateRecentChips();
+            })
+            .withFailureHandler((err) => {
+                if (tbody) tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:2rem; color:var(--danger);">เกิดข้อผิดพลาดในการโหลด: ${err.message || err}</td></tr>`;
+            })
+            .getOrdersData();
+    }
+
+    populateRecentChips() {
+        const container = document.getElementById('quick-cf-recent-chips');
+        if (!container || !this.allOrders || this.allOrders.length === 0) return;
+
+        // ดึง 6 ชื่อ TikTok ล่าสุดที่ไม่ซ้ำกัน
+        const recents = [];
+        for (let i = 0; i < this.allOrders.length; i++) {
+            const u = String(this.allOrders[i]['ชื่อ TikTok'] || this.allOrders[i]['tiktokUsername'] || '').trim();
+            if (u && u !== '-' && !recents.includes(u)) {
+                recents.push(u);
+                if (recents.length >= 6) break;
+            }
+        }
+
+        let html = '';
+        recents.forEach(u => {
+            html += `<span class="customer-chip" onclick="OrderModule.selectRecentCustomer('${u}')">${u}</span>`;
+        });
+        container.innerHTML = html;
+    }
+
+    selectRecentCustomer(tiktok) {
+        const input = document.getElementById('quick-cf-tiktok');
+        if (!input) return;
+        input.value = tiktok;
+        this.onQuickTiktokInput(tiktok);
+        document.getElementById('quick-cf-price')?.focus();
+    }
+
+    onQuickTiktokInput(val) {
+        const badge = document.getElementById('quick-cf-cust-badge');
+        this.selectedCustomer = null;
+        if (!badge) return;
+
+        if (!val || !val.trim()) {
+            badge.textContent = '';
+            return;
+        }
+
+        const clean = val.toLowerCase().replace('@', '').trim();
+        if (window.CustomerModule && window.CustomerModule.allCustomers) {
+            const found = window.CustomerModule.allCustomers.find(c => {
+                const t = String(c['ชื่อ TikTok'] || c['tiktokUsername'] || '').toLowerCase().replace('@', '').trim();
+                return t === clean;
+            });
+            if (found) {
+                this.selectedCustomer = found;
+                const name = found['ชื่อ-นามสกุล'] || found['name'] || '';
+                const spent = Number(found['ยอดซื้อสะสม'] || found['totalSpent'] || 0);
+                badge.textContent = `⭐ ลูกค้า: ${name || 'มีประวัติ'} (สะสม ฿${spent.toLocaleString()})`;
+                return;
+            }
+        }
+        badge.textContent = '✨ ลูกค้าใหม่';
+    }
+
+    quickSetPrice(price) {
+        const priceInput = document.getElementById('quick-cf-price');
+        const descInput = document.getElementById('quick-cf-desc');
+        if (priceInput) priceInput.value = price;
+        if (descInput) descInput.value = `เสื้อผ้า ${price}฿`;
+
+        // Highlight active price pill
+        document.querySelectorAll('.btn-price-pill').forEach(btn => {
+            btn.classList.toggle('active', btn.textContent.trim() === `${price}฿`);
+        });
+
+        this.recalcQuickCF();
+    }
+
+    quickAdjustQty(delta) {
+        const qtyInput = document.getElementById('quick-cf-qty');
+        if (!qtyInput) return;
+        let q = (Number(qtyInput.value) || 1) + delta;
+        if (q < 1) q = 1;
+        qtyInput.value = q;
+        this.recalcQuickCF();
+    }
+
+    quickToggleBag(isBag) {
+        this.isHoldingBagQuick = isBag;
+        const btnShip = document.getElementById('quick-toggle-ship');
+        const btnBag = document.getElementById('quick-toggle-bag');
+        
+        if (btnShip && btnBag) {
+            if (isBag) {
+                btnBag.classList.add('active');
+                btnShip.classList.remove('active');
+            } else {
+                btnShip.classList.add('active');
+                btnBag.classList.remove('active');
+            }
+        }
+        this.recalcQuickCF();
+    }
+
+    recalcQuickCF() {
+        const price = Number(document.getElementById('quick-cf-price')?.value) || 0;
+        const qty = Math.max(1, Number(document.getElementById('quick-cf-qty')?.value) || 1);
+        const subtotal = price * qty;
+        
+        // ถ้าฝากถุง ค่าส่งรอบนี้ 0 บาท (ไปสะสมรวมส่งเสาร์)
+        // ถ้าส่งทันที: 5 ตัวแรก 40 บาท ตัวที่ 6 ขึ้นไป +ตัวละ 5 บาท
+        let shipFee = 0;
+        if (!this.isHoldingBagQuick) {
+            shipFee = qty <= 5 ? 40 : 40 + ((qty - 5) * 5);
+        }
+
+        const total = subtotal + shipFee;
+
+        const subText = document.getElementById('quick-cf-subtotal-text');
+        const shipText = document.getElementById('quick-cf-shipping-text');
+        const totText = document.getElementById('quick-cf-total-text');
+
+        if (subText) subText.textContent = `฿${subtotal.toLocaleString()}`;
+        if (shipText) shipText.textContent = this.isHoldingBagQuick ? '฿0 (ฝากถุง)' : `฿${shipFee}`;
+        if (totText) totText.textContent = `฿${total.toLocaleString()}`;
+    }
+
+    submitQuickCF(e) {
+        e.preventDefault();
+        const tiktokInput = document.getElementById('quick-cf-tiktok');
+        const priceInput = document.getElementById('quick-cf-price');
+        const descInput = document.getElementById('quick-cf-desc');
+        const qtyInput = document.getElementById('quick-cf-qty');
+        const btnSubmit = document.getElementById('btn-quick-cf-submit');
+
+        const rawTiktok = String(tiktokInput.value || '').trim();
+        if (!rawTiktok) {
+            alert('กรุณาระบุชื่อ TikTok ของลูกค้า');
+            tiktokInput.focus();
+            return;
+        }
+
+        const tiktok = rawTiktok.startsWith('@') ? rawTiktok : `@${rawTiktok}`;
+        const price = Number(priceInput.value) || 0;
+        const qty = Math.max(1, Number(qtyInput.value) || 1);
+        const desc = (descInput.value || `เสื้อ ${price}฿`).trim();
+        const isBag = this.isHoldingBagQuick;
+
+        const subtotal = price * qty;
+        const shippingFee = isBag ? 0 : (qty <= 5 ? 40 : 40 + ((qty - 5) * 5));
+        const total = subtotal + shippingFee;
+
+        // Auto-extract customer info if available
+        let custName = '', custPhone = '', custId = '';
+        if (this.selectedCustomer) {
+            custName = this.selectedCustomer['ชื่อ-นามสกุล'] || this.selectedCustomer['name'] || '';
+            custPhone = this.selectedCustomer['เบอร์โทร'] || this.selectedCustomer['phone'] || '';
+            custId = this.selectedCustomer['รหัสลูกค้า'] || this.selectedCustomer['id'] || '';
+        }
+
+        const ordData = {
+            id: '',
+            tiktokUsername: tiktok,
+            customerName: custName,
+            phone: custPhone,
+            customerId: custId,
+            itemsDesc: `${desc} x ${qty} (${price}฿)`,
+            subtotal: subtotal,
+            shippingFee: shippingFee,
+            total: total,
+            isHoldingBag: isBag,
+            status: 'Paid',
+            shippingStatus: isBag ? 'Holding' : 'Waiting'
+        };
+
+        // Instant Audio & Visual Feedback
+        if (window.app) {
+            app.playSuccessSound();
+            app.showToast(`⚡ บันทึกบิล ${tiktok} ยอด ฿${total.toLocaleString()} ${isBag ? '(ฝากถุง)' : ''} สำเร็จ!`, 'success');
+        }
+
+        // Temporary disable submit to avoid double click
+        btnSubmit.disabled = true;
+        btnSubmit.style.opacity = '0.7';
+
+        // Google Sheets Sync
+        google.script.run
+            .withSuccessHandler((res) => {
+                btnSubmit.disabled = false;
+                btnSubmit.style.opacity = '1';
+                // Reset quick form for next item
+                tiktokInput.value = '';
+                document.getElementById('quick-cf-cust-badge').textContent = '';
+                this.selectedCustomer = null;
+                tiktokInput.focus();
+                // Reload data smoothly
+                OrderModule.load(true);
+            })
+            .withFailureHandler((err) => {
+                btnSubmit.disabled = false;
+                btnSubmit.style.opacity = '1';
+                alert('เกิดข้อผิดพลาดในการบันทึกลง Google Sheets: ' + err.message);
+            })
+            .saveOrderToSheet(ordData);
+    }
+
+    applyFilters() {
+        const q = String(document.getElementById('search-orders')?.value || '').toLowerCase().trim();
+        const status = document.getElementById('filter-ord-status')?.value || 'all';
+
+        let totalRev = 0, holdingCount = 0, shippedCount = 0;
+        this.allOrders.forEach(o => {
+            const tot = Number(o['ยอดสุทธิ'] || o['total'] || 0);
+            const isBag = String(o['ฝากถุง'] || '').includes('ฝาก') || o['isHoldingBag'] === true;
+            const shipStatus = String(o['สถานะจัดส่ง'] || o['shippingStatus'] || '');
+            totalRev += tot;
+            if (isBag) holdingCount++;
+            if (shipStatus === 'Shipped' || shipStatus === 'Delivered') shippedCount++;
+        });
+
+        document.getElementById('ord-kpi-total').textContent = `${this.allOrders.length} บิล`;
+        document.getElementById('ord-kpi-revenue').textContent = `฿${totalRev.toLocaleString()}`;
+        document.getElementById('ord-kpi-holding').textContent = `${holdingCount} บิล`;
+        document.getElementById('ord-kpi-shipped').textContent = `${shippedCount} บิล`;
+
+        const filtered = this.allOrders.filter(o => {
+            const id = this.getId(o).toLowerCase();
+            const tiktok = String(o['ชื่อ TikTok'] || o['tiktokUsername'] || '').toLowerCase();
+            const name = String(o['ชื่อผู้รับ'] || o['customerName'] || '').toLowerCase();
+            const ordStatus = String(o['สถานะออเดอร์'] || o['status'] || '');
+
+            if (status !== 'all' && ordStatus !== status) return false;
+            if (q && !id.includes(q) && !tiktok.includes(q) && !name.includes(q)) return false;
+            return true;
+        });
+
+        const badge = document.getElementById('ord-count-badge');
+        if (badge) badge.textContent = `แสดง ${filtered.length} / ทั้งหมด ${this.allOrders.length} บิล`;
+        this.renderTable(filtered);
+    }
+
+    renderTable(items) {
+        const tbody = document.getElementById('table-orders-body');
+        if (!tbody) return;
+
+        if (items.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:2rem; color:var(--text-muted);">ไม่พบข้อมูลออเดอร์ที่ตรงกับเงื่อนไข</td></tr>';
+            return;
+        }
+
+        let html = '';
+        items.forEach(o => {
+            const id = this.getId(o);
+            const date = o['วันที่'] || o['date'] || '-';
+            const time = o['เวลา'] || o['time'] || '';
+            const tiktok = o['ชื่อ TikTok'] || o['tiktokUsername'] || '-';
+            const name = o['ชื่อผู้รับ'] || o['customerName'] || '';
+            const itemsDesc = o['รายการสินค้า'] || o['itemsDesc'] || '-';
+            const subtotal = Number(o['ยอดสินค้า'] || o['subtotal'] || 0);
+            const shipping = Number(o['ค่าส่ง'] || o['shippingFee'] || 0);
+            const total = Number(o['ยอดสุทธิ'] || o['total'] || (subtotal + shipping));
+            const isBag = String(o['ฝากถุง'] || '').includes('ฝาก') || o['isHoldingBag'] === true;
+            const shipStatus = o['สถานะจัดส่ง'] || o['shippingStatus'] || 'Waiting';
+
+            const typeBadge = isBag 
+                ? '<span class="badge badge-bag">🛍️ ฝากถุง</span>'
+                : '<span class="badge badge-shipped">🚚 ส่งทันที</span>';
+
+            html += `
+                <tr>
+                    <td style="font-weight:700; color:var(--brand-pink); font-family:monospace;">${id}</td>
+                    <td>
+                        <div style="font-weight:600; color:var(--text-main);">${time || date}</div>
+                        <small style="color:var(--text-muted); font-size:0.75rem;">${date}</small>
+                    </td>
+                    <td>
+                        <div style="font-weight:700; color:var(--text-main);">${tiktok}</div>
+                        <small style="color:var(--text-muted);">${name}</small>
+                    </td>
+                    <td style="color:var(--text-main); max-width:200px; white-space:pre-line; font-size:0.84rem;">${itemsDesc}</td>
+                    <td style="text-align:right; font-weight:600;">฿${subtotal.toLocaleString()}</td>
+                    <td style="text-align:right; color:var(--text-muted);">฿${shipping}</td>
+                    <td style="text-align:right; font-weight:800; color:var(--text-main); font-size:0.95rem;">฿${total.toLocaleString()}</td>
+                    <td style="text-align:center;">${typeBadge}</td>
+                    <td style="text-align:center;"><span class="badge badge-paid">${shipStatus}</span></td>
+                    <td style="text-align:center; white-space:nowrap;">
+                        <button class="btn btn-outline" style="padding:3px 7px; font-size:0.75rem; margin-right:3px;" onclick="OrderModule.editOrder('${id}')">แก้ไข</button>
+                        <button class="btn btn-danger-light" style="padding:3px 7px; font-size:0.75rem;" onclick="OrderModule.deleteOrder('${id}')">ลบ</button>
+                    </td>
+                </tr>
+            `;
+        });
+        tbody.innerHTML = html;
+    }
+
+    autoCalculateShipping() {
+        const qty = Math.max(1, Number(document.getElementById('ord-qty').value) || 1);
+        const fee = qty <= 5 ? 40 : 40 + ((qty - 5) * 5);
+        document.getElementById('ord-shippingFee').value = fee;
+        this.recalculateTotal();
+    }
+
+    recalculateTotal() {
+        const sub = Number(document.getElementById('ord-subtotal').value) || 0;
+        const ship = Number(document.getElementById('ord-shippingFee').value) || 0;
+        document.getElementById('ord-total').value = sub + ship;
+    }
+
+    lookupCustomer(tiktok) {
+        if (!tiktok || !window.CustomerModule || !window.CustomerModule.allCustomers) return;
+        const clean = tiktok.toLowerCase().replace('@', '').trim();
+        const found = window.CustomerModule.allCustomers.find(c => {
+            const t = String(c['ชื่อ TikTok'] || c['tiktokUsername'] || '').toLowerCase().replace('@', '').trim();
+            return t === clean;
+        });
+        if (found) {
+            document.getElementById('ord-name').value = found['ชื่อ-นามสกุล'] || found['name'] || '';
+            document.getElementById('ord-phone').value = found['เบอร์โทร'] || found['phone'] || '';
+            document.getElementById('ord-customerId').value = found['รหัสลูกค้า'] || found['id'] || '';
+        }
+    }
+
+    openModal(order = null) {
+        const modal = document.getElementById('modal-order');
+        if (!modal) return;
+        modal.style.display = 'flex';
+
+        if (order) {
+            const oId = this.getId(order);
+            document.getElementById('modal-order-title').textContent = `แก้ไขคำสั่งซื้อ: ${oId}`;
+            document.getElementById('ord-id').value = oId;
+            document.getElementById('ord-tiktok').value = order['ชื่อ TikTok'] || order['tiktokUsername'] || '';
+            document.getElementById('ord-name').value = order['ชื่อผู้รับ'] || order['customerName'] || '';
+            document.getElementById('ord-phone').value = order['เบอร์โทร'] || order['phone'] || '';
+            document.getElementById('ord-customerId').value = order['รหัสลูกค้า'] || order['customerId'] || '';
+            document.getElementById('ord-itemsDesc').value = order['รายการสินค้า'] || order['itemsDesc'] || '';
+            document.getElementById('ord-subtotal').value = Number(order['ยอดสินค้า'] || order['subtotal'] || 0);
+            document.getElementById('ord-shippingFee').value = Number(order['ค่าส่ง'] || order['shippingFee'] || 40);
+            document.getElementById('ord-total').value = Number(order['ยอดสุทธิ'] || order['total'] || 0);
+            document.getElementById('ord-isHoldingBag').value = (String(order['ฝากถุง'] || '').includes('ฝาก') || order['isHoldingBag'] === true) ? "true" : "false";
+            document.getElementById('ord-status').value = order['สถานะออเดอร์'] || order['status'] || 'Paid';
+            document.getElementById('ord-shippingStatus').value = order['สถานะจัดส่ง'] || order['shippingStatus'] || 'Waiting';
+        } else {
+            document.getElementById('modal-order-title').textContent = 'เปิดบิลคำสั่งซื้อใหม่';
+            document.getElementById('form-order').reset();
+            document.getElementById('ord-id').value = '';
+            document.getElementById('ord-qty').value = '1';
+            document.getElementById('ord-shippingFee').value = '40';
+            document.getElementById('ord-total').value = '40';
+            document.getElementById('ord-isHoldingBag').value = 'false';
+            document.getElementById('ord-status').value = 'Paid';
+            document.getElementById('ord-shippingStatus').value = 'Waiting';
+        }
+    }
+
+    closeModal() {
+        document.getElementById('modal-order').style.display = 'none';
+    }
+
+    editOrder(id) {
+        const o = this.allOrders.find(x => this.getId(x) === id);
+        if (o) this.openModal(o);
+    }
+
+    deleteOrder(id) {
+        if (!confirm(`ยืนยันการลบออเดอร์ "${id}" หรือไม่?`)) return;
+        document.getElementById('loading-overlay').style.display = 'flex';
+        google.script.run
+            .withSuccessHandler(() => {
+                document.getElementById('loading-overlay').style.display = 'none';
+                if (window.app) app.showToast(`ลบออเดอร์ ${id} สำเร็จ!`, 'warning');
+                OrderModule.load(true);
+            })
+            .withFailureHandler((err) => {
+                document.getElementById('loading-overlay').style.display = 'none';
+                alert('เกิดข้อผิดพลาด: ' + err.message);
+            })
+            .deleteOrderFromSheet(id);
+    }
+
+    saveOrder(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btn-save-ord');
+        btn.disabled = true;
+        btn.textContent = 'กำลังบันทึกลงชีต... ⏳';
+
+        const ordData = {
+            id: document.getElementById('ord-id').value.trim(),
+            tiktokUsername: document.getElementById('ord-tiktok').value.trim(),
+            customerName: document.getElementById('ord-name').value.trim(),
+            phone: document.getElementById('ord-phone').value.trim(),
+            customerId: document.getElementById('ord-customerId').value.trim(),
+            itemsDesc: document.getElementById('ord-itemsDesc').value.trim(),
+            subtotal: Number(document.getElementById('ord-subtotal').value) || 0,
+            shippingFee: Number(document.getElementById('ord-shippingFee').value) || 0,
+            total: Number(document.getElementById('ord-total').value) || 0,
+            isHoldingBag: document.getElementById('ord-isHoldingBag').value === "true",
+            status: document.getElementById('ord-status').value,
+            shippingStatus: document.getElementById('ord-shippingStatus').value
+        };
+
+        google.script.run
+            .withSuccessHandler((res) => {
+                btn.disabled = false;
+                btn.textContent = '💾 บันทึกออเดอร์ลง Google Sheets';
+                this.closeModal();
+                if (window.app) {
+                    app.playSuccessSound();
+                    app.showToast(`✅ บันทึกออเดอร์ "${res.order.id}" สำเร็จเรียบร้อย!`, 'success');
+                }
+                OrderModule.load(true);
+            })
+            .withFailureHandler((err) => {
+                btn.disabled = false;
+                btn.textContent = '💾 บันทึกออเดอร์ลง Google Sheets';
+                alert('❌ เกิดข้อผิดพลาดในการบันทึก: ' + err.message);
+            })
+            .saveOrderToSheet(ordData);
+    }
+}
+
+window.OrderModule = new OrderModuleClass();
+</script>

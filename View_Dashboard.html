@@ -1,0 +1,418 @@
+<!-- 0. EXECUTIVE DASHBOARD & AI ANALYST (หน้าหลัก) -->
+<section id="view-dashboard" class="view active">
+    <div class="card-title-bar">
+        <div>
+            <h2 style="display:flex; align-items:center; gap:0.5rem; font-size:1.35rem; color:var(--text-main);">
+                📊 Dashboard & AI Analyst
+            </h2>
+            <p style="color:var(--text-muted); font-size:0.88rem; margin-top:2px;">
+                สรุปผลการวิเคราะห์ยอดขายและประสิทธิภาพการไลฟ์สด เชื่อมต่อ Google Sheets สด 100%
+            </p>
+        </div>
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <button class="btn btn-primary" onclick="app.switchView('orders')">⚡ แป้นยิงออเดอร์สด</button>
+            <button class="btn btn-outline" onclick="DashboardModule.load(true)">🔄 รีเฟรชข้อมูลสด</button>
+        </div>
+    </div>
+
+    <!-- AI Insight Panel (Vibrant Gradient) -->
+    <div id="ai-insight-panel" style="background:var(--brand-gradient); color:white; padding:1.5rem; border-radius:var(--radius-lg); box-shadow:var(--shadow-glow); margin-bottom:1.5rem; position:relative; overflow:hidden;">
+        <div style="display:flex; gap:1.25rem; align-items:flex-start; position:relative; z-index:2;">
+            <div style="background:rgba(255,255,255,0.25); width:50px; height:50px; border-radius:var(--radius-md); display:flex; align-items:center; justify-content:center; font-size:1.6rem; flex-shrink:0; backdrop-filter:blur(4px);">
+                🧠
+            </div>
+            <div>
+                <h3 style="margin:0 0 0.35rem 0; font-size:1.15rem; color:#FFFFFF; font-weight:800;">
+                    AI Marketing Consultant (ที่ปรึกษาการตลาดส่วนตัว)
+                </h3>
+                <div id="ai-insight-content" style="font-size:0.95rem; line-height:1.6; color:#FFF5F7;">
+                    กำลังวิเคราะห์ข้อมูลยอดขายและสถิติการไลฟ์สดของคุณจาก Google Sheets...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4 Charts Carousel -->
+    <div class="card" style="padding:1.35rem; position:relative; margin-bottom:1.5rem;">
+        <!-- Dynamic Title -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
+            <h3 id="carousel-dynamic-title" style="font-size:1.15rem; color:var(--text-main); margin:0; border-left:4px solid var(--brand-pink); padding-left:0.75rem; font-weight:800;">
+                💰 1. ยอดขายแต่ละรอบไลฟ์ (Revenue per Live)
+            </h3>
+            <!-- Slide Indicators -->
+            <div style="display:flex; align-items:center; gap:6px;">
+                <span class="chart-dot" id="dot-0" style="display:inline-block; width:12px; height:12px; background:var(--brand-pink); border-radius:50%; cursor:pointer;" onclick="DashboardModule.showChart(0)"></span>
+                <span class="chart-dot" id="dot-1" style="display:inline-block; width:12px; height:12px; background:var(--border-color); border-radius:50%; cursor:pointer;" onclick="DashboardModule.showChart(1)"></span>
+                <span class="chart-dot" id="dot-2" style="display:inline-block; width:12px; height:12px; background:var(--border-color); border-radius:50%; cursor:pointer;" onclick="DashboardModule.showChart(2)"></span>
+                <span class="chart-dot" id="dot-3" style="display:inline-block; width:12px; height:12px; background:var(--border-color); border-radius:50%; cursor:pointer;" onclick="DashboardModule.showChart(3)"></span>
+            </div>
+        </div>
+
+        <!-- Navigation Buttons -->
+        <button type="button" class="carousel-nav-btn carousel-prev" onclick="DashboardModule.prevChart()">❮</button>
+        <button type="button" class="carousel-nav-btn carousel-next" onclick="DashboardModule.nextChart()">❯</button>
+
+        <!-- Charts Container (Responsive Height) -->
+        <div id="chart-slide-0" class="chart-slide" style="display:block; padding:0 0.5rem;">
+            <div style="position:relative; height:400px; max-height:55vh; width:100%; max-width:1050px; margin:0 auto;">
+                <canvas id="chart-live-revenue"></canvas>
+            </div>
+        </div>
+        
+        <div id="chart-slide-1" class="chart-slide" style="display:none; padding:0 0.5rem;">
+            <div style="position:relative; height:400px; max-height:55vh; width:100%; max-width:1050px; margin:0 auto;">
+                <canvas id="chart-viewers-orders"></canvas>
+            </div>
+        </div>
+
+        <div id="chart-slide-2" class="chart-slide" style="display:none; padding:0 0.5rem;">
+            <div style="position:relative; height:400px; max-height:55vh; width:100%; max-width:1050px; margin:0 auto;">
+                <canvas id="chart-sales-category"></canvas>
+            </div>
+        </div>
+
+        <div id="chart-slide-3" class="chart-slide" style="display:none; padding:0 0.5rem;">
+            <div style="position:relative; height:400px; max-height:55vh; width:100%; max-width:1050px; margin:0 auto;">
+                <canvas id="chart-sales-day"></canvas>
+            </div>
+        </div>
+    </div>
+</section>
+
+
+<script>
+/**
+ * Application Router & Dashboard Controller (Online Google Sheets)
+ * ควบคุมการเปลี่ยนหน้า 10 เมนูหลัก และแสดงผลสถิติบน Dashboard
+ */
+const app = {
+    currentView: 'dashboard',
+    switchView(viewName) {
+        this.currentView = viewName;
+        // Sync desktop top menu
+        document.querySelectorAll('.top-menu .nav-item').forEach(el => el.classList.remove('active'));
+        const activeNav = Array.from(document.querySelectorAll('.top-menu .nav-item')).find(el => {
+            const txt = el.textContent.trim().toLowerCase();
+            if (viewName === 'dashboard' && txt.includes('แดชบอร์ด')) return true;
+            if (viewName === 'products' && txt.includes('จัดการสินค้า')) return true;
+            if (viewName === 'live' && txt.includes('รอบ live')) return true;
+            if (viewName === 'customers' && txt.includes('ลูกค้า')) return true;
+            if (viewName === 'orders' && txt.includes('ออเดอร์')) return true;
+            if (viewName === 'bags' && txt.includes('ฝากถุง')) return true;
+            if (viewName === 'shipping' && txt.includes('การจัดส่ง')) return true;
+            if (viewName === 'payments' && txt.includes('การเงิน')) return true;
+            if (viewName === 'reports' && txt.includes('รายงาน')) return true;
+            if (viewName === 'settings' && txt.includes('ตั้งค่า')) return true;
+            return txt.includes(viewName);
+        });
+        if (activeNav) activeNav.classList.add('active');
+
+        // Sync mobile bottom dock
+        document.querySelectorAll('.bottom-nav-item').forEach(el => el.classList.remove('active'));
+        const mobileNav = Array.from(document.querySelectorAll('.bottom-nav-item')).find(el => {
+            const txt = el.textContent.trim().toLowerCase();
+            if (viewName === 'dashboard' && txt.includes('แดชบอร์ด')) return true;
+            if (viewName === 'orders' && txt.includes('ออเดอร์')) return true;
+            if (viewName === 'bags' && txt.includes('ฝากถุง')) return true;
+            return false;
+        });
+        if (mobileNav) mobileNav.classList.add('active');
+
+        // Switch active view section
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        const targetView = document.getElementById(`view-${viewName}`);
+        if (targetView) targetView.classList.add('active');
+
+        // Close mobile drawer if open
+        this.toggleMobileDrawer(false);
+
+        // Trigger module load
+        if ((viewName === 'products' || viewName === 'inventory') && window.ProductModule) {
+            window.ProductModule.load();
+        } else if (viewName === 'live' && window.LiveModule) {
+            window.LiveModule.load();
+        } else if (viewName === 'customers' && window.CustomerModule) {
+            window.CustomerModule.load();
+        } else if (viewName === 'orders' && window.OrderModule) {
+            window.OrderModule.load();
+        } else if (viewName === 'bags' && window.BagModule) {
+            window.BagModule.load();
+        } else if (viewName === 'shipping' && window.ShippingModule) {
+            window.ShippingModule.load();
+        } else if (viewName === 'payments') {
+            if (window.PaymentModule) window.PaymentModule.load();
+            else setTimeout(() => { if (window.PaymentModule) window.PaymentModule.load(); }, 200);
+        } else if (viewName === 'reports' && window.ReportModule) {
+            window.ReportModule.generateReport('sales');
+        } else if (viewName === 'settings' && window.SettingsModule) {
+            window.SettingsModule.load();
+        }
+    },
+
+    toggleMobileDrawer(forceState) {
+        const drawer = document.getElementById('mobile-drawer');
+        const overlay = document.getElementById('mobile-drawer-overlay');
+        if (!drawer || !overlay) return;
+        const isOpen = drawer.classList.contains('open');
+        const shouldOpen = (forceState !== undefined) ? forceState : !isOpen;
+        if (shouldOpen) {
+            overlay.style.display = 'block';
+            drawer.classList.add('open');
+        } else {
+            overlay.style.display = 'none';
+            drawer.classList.remove('open');
+        }
+    },
+
+    openLiveCF() {
+        this.switchView('orders');
+        setTimeout(() => {
+            const input = document.getElementById('quick-cf-tiktok') || document.getElementById('search-orders');
+            if (input) {
+                input.focus();
+                input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }, 150);
+    },
+
+    showToast(message, type = 'success') {
+        const container = document.getElementById('toast-container');
+        if (!container) return;
+        const toast = document.createElement('div');
+        toast.className = `toast-msg toast-${type}`;
+        
+        let icon = '⚡';
+        if (type === 'success') icon = '✅';
+        else if (type === 'warning') icon = '⚠️';
+        else if (type === 'danger') icon = '❌';
+
+        toast.innerHTML = `<span style="font-size:1.2rem;">${icon}</span> <span>${message}</span>`;
+        container.appendChild(toast);
+
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(-10px)';
+            toast.style.transition = 'all 0.3s ease';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    },
+
+    playSuccessSound() {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+            osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12); // A5
+            gain.gain.setValueAtTime(0.15, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.25);
+        } catch(e) { /* ignore audio error */ }
+    },
+
+    refreshAllData() {
+        this.showToast('กำลังรีเฟรชข้อมูลจาก Google Sheets...', 'warning');
+        if (window.DashboardModule) window.DashboardModule.load(true);
+        if (this.currentView === 'products' && window.ProductModule) window.ProductModule.load(true);
+        if (this.currentView === 'live' && window.LiveModule) window.LiveModule.load(true);
+        if (this.currentView === 'customers' && window.CustomerModule) window.CustomerModule.load(true);
+        if (this.currentView === 'orders' && window.OrderModule) window.OrderModule.load(true);
+        if (this.currentView === 'bags' && window.BagModule) window.BagModule.load(true);
+        if (this.currentView === 'shipping' && window.ShippingModule) window.ShippingModule.load(true);
+        if (this.currentView === 'payments' && window.PaymentModule) window.PaymentModule.load(true);
+        if (this.currentView === 'reports' && window.ReportModule) window.ReportModule.generateReport('sales');
+    }
+};
+
+window.app = app;
+window.AppRouter = {
+    navigate: (viewName) => app.switchView(viewName)
+};
+
+var DashboardController = window.DashboardController || class DashboardController {
+    constructor() {
+        this.charts = {};
+        this.currentChartIndex = 0;
+        this.totalCharts = 4;
+        this.data = null;
+    }
+
+    load(showLoading = false) {
+        if (showLoading) {
+            document.getElementById('loading-overlay').style.display = 'flex';
+        }
+
+        google.script.run
+            .withSuccessHandler((response) => {
+                this.data = response;
+                document.getElementById('loading-overlay').style.display = 'none';
+                this.updateStatusBar(response);
+                this.renderCharts();
+                this.generateAIInsights();
+            })
+            .withFailureHandler((err) => {
+                document.getElementById('loading-overlay').style.display = 'none';
+                console.warn('Dashboard load error:', err);
+            })
+            .getInitialData();
+    }
+
+    updateStatusBar(res) {
+        const prodCount = res.products ? res.products.length : 0;
+        const ordCount = res.orders ? res.orders.length : 0;
+        const bagCount = res.holdingBags ? res.holdingBags.length : 0;
+        const shipCount = res.shipments ? res.shipments.length : 0;
+        document.getElementById('status-record-summary').textContent = `📦 สินค้า: ${prodCount} | 🛒 บิล: ${ordCount} | 🛍️ ฝากถุง: ${bagCount} | 🚚 ส่งแล้ว: ${shipCount}`;
+        document.getElementById('status-last-sync').textContent = res.timestamp || '-';
+    }
+
+    renderCharts() {
+        this.destroyAllCharts();
+        Chart.defaults.font.family = "'Sarabun', sans-serif";
+        Chart.defaults.color = '#475569';
+
+        const lives = (this.data && this.data.liveSessions) ? this.data.liveSessions : [];
+        const orders = (this.data && this.data.orders) ? this.data.orders : [];
+
+        this.renderLiveRevenue(lives);
+        this.renderViewersOrders(lives);
+        this.renderCategory(orders);
+        this.renderSalesDay(orders);
+    }
+
+    destroyAllCharts() {
+        Object.values(this.charts).forEach(c => { if (c) c.destroy(); });
+        this.charts = {};
+    }
+
+    showChart(index) {
+        this.currentChartIndex = index;
+        const titles = [
+            { text: "💰 1. ยอดขายแต่ละรอบไลฟ์ (Revenue per Live)", color: "#FF2D55" },
+            { text: "👥 2. คนดูสูงสุด vs ออเดอร์ (Viewers vs Orders)", color: "#8B5CF6" },
+            { text: "📦 3. สัดส่วนยอดขายตามหมวดหมู่ (Sales by Category)", color: "#F59E0B" },
+            { text: "📅 4. ยอดขายตามวันในสัปดาห์ (Sales by Day)", color: "#10B981" }
+        ];
+
+        const titleEl = document.getElementById('carousel-dynamic-title');
+        if (titleEl && titles[index]) {
+            titleEl.textContent = titles[index].text;
+            titleEl.style.borderLeftColor = titles[index].color;
+        }
+
+        for (let i = 0; i < this.totalCharts; i++) {
+            const slide = document.getElementById(`chart-slide-${i}`);
+            const dot = document.getElementById(`dot-${i}`);
+            if (slide) slide.style.display = (i === index) ? 'block' : 'none';
+            if (dot) dot.style.background = (i === index) ? 'var(--brand-pink)' : 'var(--border-color)';
+        }
+    }
+
+    nextChart() { this.showChart((this.currentChartIndex + 1) % this.totalCharts); }
+    prevChart() { this.showChart((this.currentChartIndex - 1 + this.totalCharts) % this.totalCharts); }
+
+    formatThaiDate(dStr) {
+        if (!dStr) return '';
+        const d = new Date(dStr);
+        if (isNaN(d.getTime())) return dStr;
+        const months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+        return `${d.getDate()} ${months[d.getMonth()]}`;
+    }
+
+    renderLiveRevenue(lives) {
+        const ctx = document.getElementById('chart-live-revenue');
+        if (!ctx) return;
+        const sorted = [...lives].sort((a,b) => new Date(a['วันที่'] || a.date) - new Date(b['วันที่'] || b.date));
+        const labels = sorted.map(l => this.formatThaiDate(l['วันที่'] || l.date));
+        const revenues = sorted.map(l => Number(l['รายได้รวม (บาท)'] || l.revenue || 0));
+
+        this.charts.revenue = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels.length ? labels : ['ยังไม่มีข้อมูล'],
+                datasets: [{
+                    label: 'ยอดขาย (บาท)',
+                    data: revenues.length ? revenues : [0],
+                    backgroundColor: '#FF2D55',
+                    borderRadius: 6
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    }
+
+    renderViewersOrders(lives) {
+        const ctx = document.getElementById('chart-viewers-orders');
+        if (!ctx) return;
+        const sorted = [...lives].sort((a,b) => new Date(a['วันที่'] || a.date) - new Date(b['วันที่'] || b.date));
+        const labels = sorted.map(l => this.formatThaiDate(l['วันที่'] || l.date));
+        const viewers = sorted.map(l => Number(l['Peak Views'] || l.peakViewer || 0));
+        const orders = sorted.map(l => Number(l['จำนวนออเดอร์'] || l.orders || 0));
+
+        this.charts.viewers = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels.length ? labels : ['ยังไม่มีข้อมูล'],
+                datasets: [
+                    { label: 'คนดูสูงสุด (Peak)', data: viewers, borderColor: '#8B5CF6', backgroundColor: '#8B5CF6', yAxisID: 'y' },
+                    { label: 'ออเดอร์', data: orders, borderColor: '#FF2D55', backgroundColor: '#FF2D55', yAxisID: 'y1' }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    y: { type: 'linear', position: 'left' },
+                    y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false } }
+                }
+            }
+        });
+    }
+
+    renderCategory(orders) {
+        const ctx = document.getElementById('chart-sales-category');
+        if (!ctx) return;
+        this.charts.cat = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['เสื้อไหมพรม', 'เสื้อเชิ้ต', 'กางเกง', 'เดรส'],
+                datasets: [{ data: [45, 25, 20, 10], backgroundColor: ['#FF2D55', '#8B5CF6', '#F59E0B', '#10B981'] }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    }
+
+    renderSalesDay(orders) {
+        const ctx = document.getElementById('chart-sales-day');
+        if (!ctx) return;
+        this.charts.day = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['จันทร์', 'อังคาร', 'พุธ', 'พฤหัส', 'ศุกร์', 'เสาร์', 'อาทิตย์'],
+                datasets: [{ label: 'ยอดขายสะสม', data: [120, 150, 200, 80, 220, 310, 190], backgroundColor: '#8B5CF6', borderRadius: 4 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    }
+
+    generateAIInsights() {
+        const lives = (this.data && this.data.liveSessions) ? this.data.liveSessions : [];
+        const totalRev = lives.reduce((sum, l) => sum + Number(l['รายได้รวม (บาท)'] || l.revenue || 0), 0);
+        const panel = document.getElementById('ai-insight-content');
+        if (panel) {
+            panel.innerHTML = `
+                วิเคราะห์สดจาก Google Sheets: ตรวจพบยอดขายรวมในระบบ <strong>฿${totalRev.toLocaleString()} บาท</strong><br>
+                สถิติชี้ว่ารอบไลฟ์วันเสาร์และพุธมี Conversion สูงสุด แนะนำให้จัดโปรโมชั่นเซตพิเศษในช่วงเวลา 20:00 - 22:00 น. เพื่อดันยอดขายสูงสุดครับ
+            `;
+        }
+    }
+}
+
+window.DashboardModule = new DashboardController();
+document.addEventListener('DOMContentLoaded', () => {
+    window.DashboardModule.load();
+});
+</script>

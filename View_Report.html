@@ -1,0 +1,534 @@
+<!-- 8. REPORTS VIEW (ศูนย์รายงานและวิเคราะห์กำไรแท้จริง) -->
+<section id="view-reports" class="view">
+    <div class="card-title-bar">
+        <div>
+            <h2 style="display:flex; align-items:center; gap:0.5rem; font-size:1.35rem; color:var(--text-main);">
+                📈 ศูนย์รายงานและวิเคราะห์ผลประกอบการ
+            </h2>
+            <p style="color:var(--text-muted); font-size:0.88rem; margin-top:2px;">
+                วิเคราะห์ผลประกอบการ กำไรสุทธิแท้จริงหักต้นทุนแฝง 8฿ สต๊อกสินค้า และสถิติ Live สด
+            </p>
+        </div>
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <button class="btn btn-outline" onclick="ReportModule.printReport()">🖨️ พิมพ์รายงาน (Print)</button>
+        </div>
+    </div>
+
+    <!-- Report Type Selector Buttons -->
+    <div style="display:flex; gap:0.5rem; margin-bottom:1.25rem; flex-wrap:wrap;">
+        <button id="btn-rep-sales" class="btn btn-primary" onclick="ReportModule.generateReport('sales')">📊 รายงานยอดขาย</button>
+        <button id="btn-rep-profit" class="btn btn-outline" onclick="ReportModule.generateReport('profit')">💰 วิเคราะห์กำไรแท้จริง (หักทุนแฝง 8฿)</button>
+        <button id="btn-rep-inventory" class="btn btn-outline" onclick="ReportModule.generateReport('inventory')">📦 รายงานสต๊อกสินค้า</button>
+        <button id="btn-rep-customers" class="btn btn-outline" onclick="ReportModule.generateReport('customers')">👥 รายงานลูกค้า</button>
+        <button id="btn-rep-live" class="btn btn-outline" onclick="ReportModule.generateReport('live')">🎥 รายงาน TikTok Live</button>
+    </div>
+
+    <!-- Report Output Container -->
+    <div class="card" id="report-output-area" style="padding:1.5rem; min-height:450px;">
+        <p style="text-align:center; padding:3rem; color:var(--text-muted);">กำลังสร้างรายงาน... ⏳</p>
+    </div>
+</section>
+<script>
+/**
+ * Reports Controller - เชื่อมต่อข้อมูล Google Sheets คำนวณกำไรแท้จริงหักทุนแฝง 8฿
+ */
+var ReportModuleClass = window.ReportModuleClass || class ReportModuleClass {
+    constructor() {
+        this.currentReportType = 'sales';
+        this.cache = null;
+    }
+
+    ensureData(callback) {
+        if (this.cache) {
+            callback(this.cache);
+            return;
+        }
+
+        const container = document.getElementById('report-output-area');
+        if (container) container.innerHTML = '<p style="text-align:center; padding:3rem; color:#64748b;">กำลังรวบรวมข้อมูลสดจาก Google Sheets... ⏳</p>';
+
+        google.script.run
+            .withSuccessHandler((res) => {
+                this.cache = res || {};
+                callback(this.cache);
+            })
+            .withFailureHandler((err) => {
+                if (container) container.innerHTML = `<p style="text-align:center; padding:3rem; color:#dc2626;">เกิดข้อผิดพลาดในการโหลดข้อมูล: ${err.message || err}</p>`;
+            })
+            .getInitialData();
+    }
+
+    generateReport(type) {
+        this.currentReportType = type;
+
+        // Update button states
+        ['sales', 'profit', 'inventory', 'customers', 'live'].forEach(t => {
+            const btn = document.getElementById(`btn-rep-${t}`);
+            if (btn) {
+                if (t === type) {
+                    btn.className = 'btn btn-primary';
+                } else {
+                    btn.className = 'btn btn-outline';
+                }
+            }
+        });
+
+        this.ensureData((data) => {
+            const container = document.getElementById('report-output-area');
+            if (!container) return;
+
+            const orders = (data.orders || []).filter(o => {
+                const st = String(o['สถานะออเดอร์'] || o['status'] || '').toLowerCase();
+                return !st.includes('cancel') && !st.includes('ยกเลิก');
+            });
+            const products = data.products || [];
+            const customers = data.customers || [];
+            const liveSessions = data.liveSessions || [];
+            const shipments = data.shipments || [];
+
+            if (type === 'sales') this.renderSalesReport(container, orders);
+            else if (type === 'profit') this.renderProfitReport(container, orders, products, shipments);
+            else if (type === 'inventory') this.renderInventoryReport(container, products);
+            else if (type === 'customers') this.renderCustomersReport(container, customers, orders);
+            else if (type === 'live') this.renderLiveReport(container, liveSessions, orders);
+        });
+    }
+
+    printReport() {
+        window.print();
+    }
+
+    renderSalesReport(container, orders) {
+        let totalRev = 0, totalItems = 0;
+        orders.forEach(o => {
+            totalRev += Number(o['ยอดสุทธิ'] || o['grandTotal'] || o['ยอดสินค้า'] || 0);
+            const itemsStr = String(o['รายการสินค้า'] || o['itemsDesc'] || '');
+            const m = itemsStr.match(/x\s*(\d+)/g);
+            if (m) {
+                m.forEach(x => totalItems += parseInt(x.replace(/x\s*/i, ''), 10));
+            } else {
+                totalItems += 1;
+            }
+        });
+
+        const avgTicket = orders.length > 0 ? Math.round(totalRev / orders.length) : 0;
+
+        let html = `
+            <div class="printable-report">
+                <div style="border-bottom:2px solid #0f172a; padding-bottom:0.75rem; margin-bottom:1.25rem; display:flex; justify-content:space-between; align-items:flex-end;">
+                    <div>
+                        <h2 style="color:#0f172a; margin:0; font-size:1.3rem;">📊 รายงานสรุปยอดขาย (Sales Summary Report)</h2>
+                        <small style="color:#64748b;">ออกเมื่อ: ${new Date().toLocaleString('th-TH')}</small>
+                    </div>
+                    <span style="background:#0f172a; color:white; font-size:0.8rem; padding:4px 10px; border-radius:4px; font-weight:bold;">ทั้งหมด ${orders.length} บิล</span>
+                </div>
+
+                <!-- KPI Cards -->
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:1rem; margin-bottom:1.5rem;">
+                    <div style="background:#f8fafc; border-left:4px solid #0f172a; padding:0.9rem; border-radius:6px;">
+                        <span style="font-size:0.78rem; color:#64748b; font-weight:bold;">ยอดขายรวมทั้งหมด</span>
+                        <div style="font-size:1.3rem; font-weight:bold; color:#0f172a; margin-top:2px;">฿${totalRev.toLocaleString()}</div>
+                    </div>
+                    <div style="background:#f8fafc; border-left:4px solid #1e3a8a; padding:0.9rem; border-radius:6px;">
+                        <span style="font-size:0.78rem; color:#64748b; font-weight:bold;">จำนวนคำสั่งซื้อ</span>
+                        <div style="font-size:1.3rem; font-weight:bold; color:#1e3a8a; margin-top:2px;">${orders.length} บิล</div>
+                    </div>
+                    <div style="background:#f8fafc; border-left:4px solid #b45309; padding:0.9rem; border-radius:6px;">
+                        <span style="font-size:0.78rem; color:#64748b; font-weight:bold;">เสื้อผ้าที่ขายได้</span>
+                        <div style="font-size:1.3rem; font-weight:bold; color:#b45309; margin-top:2px;">${totalItems} ตัว</div>
+                    </div>
+                    <div style="background:#f8fafc; border-left:4px solid #10b981; padding:0.9rem; border-radius:6px;">
+                        <span style="font-size:0.78rem; color:#64748b; font-weight:bold;">ยอดเฉลี่ยต่อบิล</span>
+                        <div style="font-size:1.3rem; font-weight:bold; color:#10b981; margin-top:2px;">฿${avgTicket.toLocaleString()}</div>
+                    </div>
+                </div>
+
+                <!-- Table -->
+                <table style="width:100%; border-collapse:collapse; font-size:0.85rem; text-align:left;">
+                    <thead>
+                        <tr style="background:#0f172a; color:white;">
+                            <th style="padding:0.6rem 0.75rem;">รหัสออเดอร์</th>
+                            <th style="padding:0.6rem 0.75rem;">วันที่</th>
+                            <th style="padding:0.6rem 0.75rem;">ลูกค้า / TikTok</th>
+                            <th style="padding:0.6rem 0.75rem;">รายการสินค้า</th>
+                            <th style="padding:0.6rem 0.75rem; text-align:right;">ค่าสินค้า</th>
+                            <th style="padding:0.6rem 0.75rem; text-align:right;">ค่าส่ง</th>
+                            <th style="padding:0.6rem 0.75rem; text-align:right;">ยอดสุทธิ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${orders.map(o => `
+                            <tr style="border-bottom:1px solid #e2e8f0;">
+                                <td style="padding:0.65rem 0.75rem; font-weight:bold; color:#1e3a8a;">${o['รหัสออเดอร์'] || o['id']}</td>
+                                <td style="padding:0.65rem 0.75rem; color:#64748b;">${o['วันที่'] || '-'}</td>
+                                <td style="padding:0.65rem 0.75rem;">
+                                    <div style="font-weight:600; color:#0f172a;">${o['ชื่อ TikTok'] || '-'}</div>
+                                    <small style="color:#64748b;">${o['ชื่อผู้รับ'] || ''}</small>
+                                </td>
+                                <td style="padding:0.65rem 0.75rem; max-width:260px; font-size:0.8rem; color:#334155;">${o['รายการสินค้า'] || '-'}</td>
+                                <td style="padding:0.65rem 0.75rem; text-align:right;">฿${Number(o['ยอดสินค้า'] || 0).toLocaleString()}</td>
+                                <td style="padding:0.65rem 0.75rem; text-align:right; color:#64748b;">฿${Number(o['ค่าส่ง'] || 0).toLocaleString()}</td>
+                                <td style="padding:0.65rem 0.75rem; text-align:right; font-weight:bold; color:#0f172a;">฿${Number(o['ยอดสุทธิ'] || 0).toLocaleString()}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        container.innerHTML = html;
+    }
+
+    renderProfitReport(container, orders, products, shipments) {
+        // Build map of products for direct cost lookup
+        const prodMap = {};
+        products.forEach(p => {
+            const id = String(p['รหัสสินค้า'] || p['id'] || '').trim();
+            const cost = Number(p['ต้นทุน'] || p['costPrice'] || 0);
+            if (id) prodMap[id] = cost;
+        });
+
+        let totalRevenue = 0;
+        let totalDirectCost = 0;
+        let totalOverheadCost = 0;
+        let totalShipCollected = 0;
+        let totalShipActual = 0;
+        let totalItems = 0;
+
+        const orderRows = [];
+
+        orders.forEach(o => {
+            const grand = Number(o['ยอดสุทธิ'] || o['grandTotal'] || 0);
+            const sub = Number(o['ยอดสินค้า'] || o['subtotal'] || grand);
+            const ship = Number(o['ค่าส่ง'] || o['shippingFee'] || 0);
+
+            totalRevenue += grand;
+            totalShipCollected += ship;
+
+            // Approximate or exact items count & cost
+            const itemsStr = String(o['รายการสินค้า'] || o['itemsDesc'] || '');
+            let orderQty = 0;
+            let orderDirectCost = 0;
+
+            const parts = itemsStr.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+            if (parts.length > 0) {
+                parts.forEach(pt => {
+                    const m = pt.match(/x\s*(\d+)/i) || pt.match(/(\d+)\s*(ตัว|ชิ้น)/i);
+                    const q = m ? parseInt(m[1], 10) : 1;
+                    orderQty += q;
+
+                    // Match product code inside brackets e.g. [45-001]
+                    const codeMatch = pt.match(/\[([a-zA-Z0-9_-]+)\]/);
+                    let unitCost = 25; // default reasonable direct cost
+                    if (codeMatch && prodMap[codeMatch[1]]) {
+                        unitCost = prodMap[codeMatch[1]];
+                    }
+                    orderDirectCost += unitCost * q;
+                });
+            } else {
+                orderQty = 1;
+                orderDirectCost = 25;
+            }
+
+            totalItems += orderQty;
+            const orderOverhead = orderQty * 8; // 8 THB per item signature rule
+            totalDirectCost += orderDirectCost;
+            totalOverheadCost += orderOverhead;
+
+            const actualShipCost = ship > 0 ? (ship <= 40 ? 35 : ship - 5) : 0;
+            totalShipActual += actualShipCost;
+            const shipVariance = ship - actualShipCost;
+
+            const orderTrueCost = orderDirectCost + orderOverhead;
+            const netProfit = (sub - orderTrueCost) + shipVariance;
+
+            orderRows.push({
+                id: o['รหัสออเดอร์'] || o['id'],
+                date: o['วันที่'] || '-',
+                customer: o['ชื่อ TikTok'] || o['ชื่อผู้รับ'] || '-',
+                itemsCount: orderQty,
+                subtotal: sub,
+                directCost: orderDirectCost,
+                overhead: orderOverhead,
+                trueCost: orderTrueCost,
+                shipVariance: shipVariance,
+                netProfit: netProfit
+            });
+        });
+
+        const trueTotalCost = totalDirectCost + totalOverheadCost;
+        const netShipVariance = totalShipCollected - totalShipActual;
+        const grossProfit = (totalRevenue - totalShipCollected) - trueTotalCost;
+        const trueNetProfit = grossProfit + netShipVariance;
+        const netMargin = totalRevenue > 0 ? ((trueNetProfit / totalRevenue) * 100).toFixed(1) : 0;
+
+        let html = `
+            <div class="printable-report">
+                <div style="border-bottom:2px solid #9f1239; padding-bottom:0.75rem; margin-bottom:1.25rem; display:flex; justify-content:space-between; align-items:flex-end;">
+                    <div>
+                        <h2 style="color:#0f172a; margin:0; font-size:1.3rem;">💰 รายงานวิเคราะห์ต้นทุน กำไรแท้จริง (หักทุนแฝง 8฿) และส่วนต่างค่าส่ง</h2>
+                        <small style="color:#64748b;">คำนวณตามสูตรธุรกิจ Ambliss_style: หักต้นทุนผ้าตรง + หักทุนแฝง 8฿/ตัว + คิดผลต่างค่าส่งจริง</small>
+                    </div>
+                    <span style="background:#9f1239; color:white; font-size:0.8rem; padding:4px 10px; border-radius:4px; font-weight:bold;">กำไรสุทธิ ${netMargin}%</span>
+                </div>
+
+                <!-- 4 Breakdown Summary Cards -->
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:1rem; margin-bottom:1.5rem;">
+                    <div style="background:#f8fafc; border-left:4px solid #0f172a; padding:0.9rem; border-radius:6px;">
+                        <span style="font-size:0.78rem; color:#64748b; font-weight:bold;">💵 รายรับรวมทั้งร้าน (Inflow)</span>
+                        <div style="font-size:1.3rem; font-weight:bold; color:#0f172a; margin-top:2px;">฿${totalRevenue.toLocaleString()}</div>
+                        <small style="font-size:0.72rem; color:#64748b;">ค่าของ + ค่าส่งรวม</small>
+                    </div>
+                    <div style="background:#f8fafc; border-left:4px solid #1e3a8a; padding:0.9rem; border-radius:6px;">
+                        <span style="font-size:0.78rem; color:#64748b; font-weight:bold;">🏷️ ต้นทุนสินค้าโดยตรง</span>
+                        <div style="font-size:1.3rem; font-weight:bold; color:#1e3a8a; margin-top:2px;">฿${totalDirectCost.toLocaleString()}</div>
+                        <small style="font-size:0.72rem; color:#64748b;">เฉลี่ย ฿${totalItems > 0 ? (totalDirectCost/totalItems).toFixed(1) : 0}/ตัว</small>
+                    </div>
+                    <div style="background:#f8fafc; border-left:4px solid #b45309; padding:0.9rem; border-radius:6px;">
+                        <span style="font-size:0.78rem; color:#64748b; font-weight:bold;">📦 ต้นทุนแฝง/สำรอง (@8฿/ตัว)</span>
+                        <div style="font-size:1.3rem; font-weight:bold; color:#b45309; margin-top:2px;">฿${totalOverheadCost.toLocaleString()}</div>
+                        <small style="font-size:0.72rem; color:#64748b;">ค่าถุง/แพ็คเกจ (${totalItems} ตัว)</small>
+                    </div>
+                    <div style="background:#f8fafc; border-left:4px solid #10b981; padding:0.9rem; border-radius:6px;">
+                        <span style="font-size:0.78rem; color:#64748b; font-weight:bold;">🚚 ส่วนต่างค่าส่งจริง (Variance)</span>
+                        <div style="font-size:1.3rem; font-weight:bold; color:#10b981; margin-top:2px;">+฿${netShipVariance.toLocaleString()}</div>
+                        <small style="font-size:0.72rem; color:#64748b;">เก็บ ฿${totalShipCollected} | จ่ายจริง ฿${totalShipActual}</small>
+                    </div>
+                </div>
+
+                <!-- True Profit Showcase Box -->
+                <div style="background:#ecfdf5; border:2px solid #86efac; border-radius:8px; padding:1.25rem; margin-bottom:1.5rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+                    <div>
+                        <span style="color:#166534; font-size:0.9rem; font-weight:bold;">🏆 กำไรสุทธิแท้จริงเข้ากระเป๋า (True Net Profit)</span>
+                        <div style="font-size:1.8rem; font-weight:800; color:#166534; margin-top:3px;">฿${trueNetProfit.toLocaleString()}</div>
+                        <small style="color:#15803d; font-size:0.8rem;">หักต้นทุนผ้า + หักต้นทุนแฝง 8฿ + รวมกำไรส่วนต่างค่าจัดส่งพัสดุครบถ้วน</small>
+                    </div>
+                    <div style="text-align:right;">
+                        <span style="color:#64748b; font-size:0.85rem; font-weight:bold;">อัตรากำไรสุทธิ (Net Margin)</span>
+                        <div style="font-size:1.8rem; font-weight:800; color:#0f172a; margin-top:3px;">${netMargin}%</div>
+                        <small style="color:#64748b; font-size:0.8rem;">จากยอดขายรวมทั้งหมด</small>
+                    </div>
+                </div>
+
+                <!-- Table -->
+                <h4 style="color:#0f172a; margin-bottom:0.75rem; font-size:0.95rem;">🔍 ตารางแจกแจงต้นทุนและกำไรรายบิล (Per-Order Reconciliation)</h4>
+                <div style="overflow-x:auto;">
+                    <table style="width:100%; border-collapse:collapse; font-size:0.85rem; text-align:left;">
+                        <thead>
+                            <tr style="background:#0f172a; color:white;">
+                                <th style="padding:0.6rem 0.75rem;">รหัสออเดอร์</th>
+                                <th style="padding:0.6rem 0.75rem;">ลูกค้า</th>
+                                <th style="padding:0.6rem 0.75rem; text-align:center;">จำนวน</th>
+                                <th style="padding:0.6rem 0.75rem; text-align:right;">ค่าเสื้อ</th>
+                                <th style="padding:0.6rem 0.75rem; text-align:right; color:#93c5fd;">ทุนตรง</th>
+                                <th style="padding:0.6rem 0.75rem; text-align:right; color:#fde68a;">ทุนแฝง (8฿)</th>
+                                <th style="padding:0.6rem 0.75rem; text-align:right; color:#fca5a5;">ทุนรวม</th>
+                                <th style="padding:0.6rem 0.75rem; text-align:right; color:#86efac;">ส่วนต่างส่ง</th>
+                                <th style="padding:0.6rem 0.75rem; text-align:right;">กำไรสุทธิ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${orderRows.map(r => `
+                                <tr style="border-bottom:1px solid #e2e8f0;">
+                                    <td style="padding:0.65rem 0.75rem; font-weight:bold; color:#1e3a8a;">${r.id}</td>
+                                    <td style="padding:0.65rem 0.75rem; color:#334155;">${r.customer}</td>
+                                    <td style="padding:0.65rem 0.75rem; text-align:center;">${r.itemsCount} ตัว</td>
+                                    <td style="padding:0.65rem 0.75rem; text-align:right;">฿${r.subtotal.toLocaleString()}</td>
+                                    <td style="padding:0.65rem 0.75rem; text-align:right; color:#1e3a8a;">-฿${r.directCost.toLocaleString()}</td>
+                                    <td style="padding:0.65rem 0.75rem; text-align:right; color:#b45309;">-฿${r.overhead.toLocaleString()}</td>
+                                    <td style="padding:0.65rem 0.75rem; text-align:right; color:#9f1239; font-weight:600;">-฿${r.trueCost.toLocaleString()}</td>
+                                    <td style="padding:0.65rem 0.75rem; text-align:right; color:#10b981; font-weight:600;">+฿${r.shipVariance.toLocaleString()}</td>
+                                    <td style="padding:0.65rem 0.75rem; text-align:right; font-weight:bold; color:#166534; font-size:0.95rem;">฿${r.netProfit.toLocaleString()}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+        container.innerHTML = html;
+    }
+
+    renderInventoryReport(container, products) {
+        let totalQty = 0, totalDirectVal = 0, totalRetailVal = 0;
+        const catMap = {};
+
+        products.forEach(p => {
+            const q = Number(p['คงเหลือ'] || p['quantity'] || p['stock'] || 0);
+            const cost = Number(p['ต้นทุน'] || p['costPrice'] || 0);
+            const price = Number(p['ราคาขาย'] || p['sellingPrice'] || 0);
+            const cat = String(p['หมวดหมู่'] || p['category'] || 'ทั่วไป').trim();
+
+            totalQty += q;
+            totalDirectVal += cost * q;
+            totalRetailVal += price * q;
+
+            if (!catMap[cat]) catMap[cat] = { qty: 0, cost: 0, retail: 0 };
+            catMap[cat].qty += q;
+            catMap[cat].cost += cost * q;
+            catMap[cat].retail += price * q;
+        });
+
+        const totalOverheadVal = totalQty * 8;
+        const trueCostVal = totalDirectVal + totalOverheadVal;
+        const estProfit = Math.max(0, totalRetailVal - trueCostVal);
+        const estMargin = totalRetailVal > 0 ? ((estProfit / totalRetailVal) * 100).toFixed(1) : 0;
+
+        let html = `
+            <div class="printable-report">
+                <div style="border-bottom:2px solid #0f172a; padding-bottom:0.75rem; margin-bottom:1.25rem; display:flex; justify-content:space-between; align-items:flex-end;">
+                    <div>
+                        <h2 style="color:#0f172a; margin:0; font-size:1.3rem;">📦 รายงานมูลค่าสต๊อกสินค้าและกำไรคาดการณ์ (Stock Valuation Report)</h2>
+                        <small style="color:#64748b;">วิเคราะห์มูลค่าสต๊อกคงคลังแยกตามหมวดหมู่ คำนวณร่วมกับต้นทุนแฝง 8฿/ตัว</small>
+                    </div>
+                    <span style="background:#0f172a; color:white; font-size:0.8rem; padding:4px 10px; border-radius:4px; font-weight:bold;">สต๊อก ${totalQty} ตัว</span>
+                </div>
+
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:1rem; margin-bottom:1.5rem;">
+                    <div style="background:#f8fafc; border-left:4px solid #0f172a; padding:0.9rem; border-radius:6px;">
+                        <span style="font-size:0.78rem; color:#64748b; font-weight:bold;">📦 สต๊อกคงเหลือรวม</span>
+                        <div style="font-size:1.3rem; font-weight:bold; color:#0f172a; margin-top:2px;">${totalQty.toLocaleString()} ตัว</div>
+                    </div>
+                    <div style="background:#f8fafc; border-left:4px solid #1e3a8a; padding:0.9rem; border-radius:6px;">
+                        <span style="font-size:0.78rem; color:#64748b; font-weight:bold;">🏷️ ทุนตรง + ทุนแฝง 8฿</span>
+                        <div style="font-size:1.3rem; font-weight:bold; color:#1e3a8a; margin-top:2px;">฿${trueCostVal.toLocaleString()}</div>
+                    </div>
+                    <div style="background:#f8fafc; border-left:4px solid #b45309; padding:0.9rem; border-radius:6px;">
+                        <span style="font-size:0.78rem; color:#64748b; font-weight:bold;">💎 มูลค่าราคาขายรวม</span>
+                        <div style="font-size:1.3rem; font-weight:bold; color:#b45309; margin-top:2px;">฿${totalRetailVal.toLocaleString()}</div>
+                    </div>
+                    <div style="background:#f8fafc; border-left:4px solid #10b981; padding:0.9rem; border-radius:6px;">
+                        <span style="font-size:0.78rem; color:#64748b; font-weight:bold;">📈 กำไรคาดการณ์ (Margin)</span>
+                        <div style="font-size:1.3rem; font-weight:bold; color:#10b981; margin-top:2px;">+฿${estProfit.toLocaleString()} (${estMargin}%)</div>
+                    </div>
+                </div>
+
+                <h4 style="color:#0f172a; margin-bottom:0.75rem; font-size:0.95rem;">📊 สรุปสต๊อกแยกตามหมวดหมู่</h4>
+                <table style="width:100%; border-collapse:collapse; font-size:0.85rem; text-align:left;">
+                    <thead>
+                        <tr style="background:#0f172a; color:white;">
+                            <th style="padding:0.6rem 0.75rem;">หมวดหมู่สินค้า</th>
+                            <th style="padding:0.6rem 0.75rem; text-align:center;">คงเหลือ</th>
+                            <th style="padding:0.6rem 0.75rem; text-align:right;">ต้นทุนตรง</th>
+                            <th style="padding:0.6rem 0.75rem; text-align:right;">ทุนแฝง (8฿)</th>
+                            <th style="padding:0.6rem 0.75rem; text-align:right;">ทุนรวมแท้จริง</th>
+                            <th style="padding:0.6rem 0.75rem; text-align:right;">มูลค่าขาย</th>
+                            <th style="padding:0.6rem 0.75rem; text-align:right;">กำไรคาดการณ์</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${Object.keys(catMap).map(cat => {
+                            const c = catMap[cat];
+                            const oh = c.qty * 8;
+                            const tc = c.cost + oh;
+                            const prof = Math.max(0, c.retail - tc);
+                            return `
+                                <tr style="border-bottom:1px solid #e2e8f0;">
+                                    <td style="padding:0.65rem 0.75rem; font-weight:bold; color:#0f172a;">${cat}</td>
+                                    <td style="padding:0.65rem 0.75rem; text-align:center; font-weight:bold; color:#1e3a8a;">${c.qty} ตัว</td>
+                                    <td style="padding:0.65rem 0.75rem; text-align:right;">฿${c.cost.toLocaleString()}</td>
+                                    <td style="padding:0.65rem 0.75rem; text-align:right; color:#b45309;">฿${oh.toLocaleString()}</td>
+                                    <td style="padding:0.65rem 0.75rem; text-align:right; color:#9f1239; font-weight:600;">฿${tc.toLocaleString()}</td>
+                                    <td style="padding:0.65rem 0.75rem; text-align:right; font-weight:bold; color:#0f172a;">฿${c.retail.toLocaleString()}</td>
+                                    <td style="padding:0.65rem 0.75rem; text-align:right; font-weight:bold; color:#166534;">+฿${prof.toLocaleString()}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        container.innerHTML = html;
+    }
+
+    renderCustomersReport(container, customers, orders) {
+        let html = `
+            <div class="printable-report">
+                <div style="border-bottom:2px solid #0f172a; padding-bottom:0.75rem; margin-bottom:1.25rem; display:flex; justify-content:space-between; align-items:flex-end;">
+                    <div>
+                        <h2 style="color:#0f172a; margin:0; font-size:1.3rem;">👥 รายงานวิเคราะห์ลูกค้า (Customer Performance Report)</h2>
+                        <small style="color:#64748b;">สถิติการสั่งซื้อ ยอดใช้จ่ายสะสม และระดับสมาชิกลูกค้า</small>
+                    </div>
+                    <span style="background:#0f172a; color:white; font-size:0.8rem; padding:4px 10px; border-radius:4px; font-weight:bold;">ลูกค้าทั้งหมด ${customers.length} คน</span>
+                </div>
+
+                <table style="width:100%; border-collapse:collapse; font-size:0.85rem; text-align:left;">
+                    <thead>
+                        <tr style="background:#0f172a; color:white;">
+                            <th style="padding:0.6rem 0.75rem;">รหัสลูกค้า</th>
+                            <th style="padding:0.6rem 0.75rem;">ชื่อ TikTok</th>
+                            <th style="padding:0.6rem 0.75rem;">ชื่อ-นามสกุล</th>
+                            <th style="padding:0.6rem 0.75rem;">เบอร์โทร</th>
+                            <th style="padding:0.6rem 0.75rem; text-align:right;">ยอดซื้อสะสม</th>
+                            <th style="padding:0.6rem 0.75rem; text-align:center;">จำนวนบิล</th>
+                            <th style="padding:0.6rem 0.75rem; text-align:center;">ระดับลูกค้า</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${customers.map(c => `
+                            <tr style="border-bottom:1px solid #e2e8f0;">
+                                <td style="padding:0.65rem 0.75rem; font-weight:bold; color:#1e3a8a;">${c['รหัสลูกค้า'] || c['id']}</td>
+                                <td style="padding:0.65rem 0.75rem; font-weight:600; color:#0f172a;">${c['ชื่อ TikTok'] || c['tiktokUsername'] || '-'}</td>
+                                <td style="padding:0.65rem 0.75rem; color:#334155;">${c['ชื่อ-นามสกุล'] || c['customerName'] || '-'}</td>
+                                <td style="padding:0.65rem 0.75rem; color:#64748b;">${c['เบอร์โทร'] || c['phone'] || '-'}</td>
+                                <td style="padding:0.65rem 0.75rem; text-align:right; font-weight:bold; color:#0f172a;">฿${Number(c['ยอดซื้อสะสม'] || c['totalSpending'] || 0).toLocaleString()}</td>
+                                <td style="padding:0.65rem 0.75rem; text-align:center;">${c['จำนวนออเดอร์'] || c['totalOrders'] || 0} บิล</td>
+                                <td style="padding:0.65rem 0.75rem; text-align:center;">
+                                    <span style="background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:12px; font-size:0.75rem; font-weight:bold;">${c['ระดับสมาชิก'] || c['tier'] || 'ทั่วไป'}</span>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        container.innerHTML = html;
+    }
+
+    renderLiveReport(container, liveSessions, orders) {
+        let html = `
+            <div class="printable-report">
+                <div style="border-bottom:2px solid #0f172a; padding-bottom:0.75rem; margin-bottom:1.25rem; display:flex; justify-content:space-between; align-items:flex-end;">
+                    <div>
+                        <h2 style="color:#0f172a; margin:0; font-size:1.3rem;">🎥 รายงานสถิติรอบ TikTok Live (Live Sessions Report)</h2>
+                        <small style="color:#64748b;">ประวัติรอบไลฟ์ ยอดคนดู จำนวนชิ้นที่ขายได้ และรายได้ในแต่ละรอบ</small>
+                    </div>
+                    <span style="background:#0f172a; color:white; font-size:0.8rem; padding:4px 10px; border-radius:4px; font-weight:bold;">ทั้งหมด ${liveSessions.length} รอบ</span>
+                </div>
+
+                <table style="width:100%; border-collapse:collapse; font-size:0.85rem; text-align:left;">
+                    <thead>
+                        <tr style="background:#0f172a; color:white;">
+                            <th style="padding:0.6rem 0.75rem;">รหัส Live</th>
+                            <th style="padding:0.6rem 0.75rem;">วันที่</th>
+                            <th style="padding:0.6rem 0.75rem;">หัวข้อ / ธีม</th>
+                            <th style="padding:0.6rem 0.75rem; text-align:center;">คนดูสูงสุด</th>
+                            <th style="padding:0.6rem 0.75rem; text-align:center;">ชิ้นที่ขายได้</th>
+                            <th style="padding:0.6rem 0.75rem; text-align:right;">รายได้รวม</th>
+                            <th style="padding:0.6rem 0.75rem; text-align:center;">สถานะ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${liveSessions.map(l => `
+                            <tr style="border-bottom:1px solid #e2e8f0;">
+                                <td style="padding:0.65rem 0.75rem; font-weight:bold; color:#1e3a8a;">${l['รหัส Live'] || l['id']}</td>
+                                <td style="padding:0.65rem 0.75rem; color:#64748b;">${l['วันที่'] || '-'}</td>
+                                <td style="padding:0.65rem 0.75rem; font-weight:600; color:#0f172a;">${l['หัวข้อ/ธีม'] || l['theme'] || '-'}</td>
+                                <td style="padding:0.65rem 0.75rem; text-align:center;">${Number(l['คนดูสูงสุด'] || l['peakViewers'] || 0).toLocaleString()} คน</td>
+                                <td style="padding:0.65rem 0.75rem; text-align:center; font-weight:bold; color:#b45309;">${Number(l['ชิ้นที่ขายได้'] || l['itemsSold'] || 0)} ตัว</td>
+                                <td style="padding:0.65rem 0.75rem; text-align:right; font-weight:bold; color:#0f172a;">฿${Number(l['ยอดขายรวม'] || l['revenue'] || 0).toLocaleString()}</td>
+                                <td style="padding:0.65rem 0.75rem; text-align:center;">
+                                    <span style="background:#dcfce7; color:#166534; padding:2px 8px; border-radius:12px; font-size:0.75rem; font-weight:bold;">${l['สถานะ'] || l['status'] || 'จบไลฟ์แล้ว'}</span>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        container.innerHTML = html;
+    }
+}
+
+window.ReportModule = new ReportModuleClass();
+</script>
+

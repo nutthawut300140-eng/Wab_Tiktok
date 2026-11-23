@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Ambliss_style - TikTok Live Backoffice Cloud ERP</title>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <?!= include('Style'); ?>
+</head>
+<body>
+    <!-- TOAST NOTIFICATIONS -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- LOADING SPINNER -->
+    <div id="loading-overlay">
+        <div class="spinner"></div>
+        <div style="margin-top:1rem; font-weight:700; color:var(--text-main); font-size:1rem;">กำลังโหลดข้อมูลสดจาก Google Sheets...</div>
+        <small style="color:var(--text-muted); margin-top:4px;">เชื่อมต่อ Cloud Real-time 100%</small>
+    </div>
+
+    <div class="app-layout">
+        <!-- TOPBAR -->
+        <header class="app-topbar">
+            <div class="topbar-container">
+                <!-- Brand & Live Pulse -->
+                <div class="topbar-brand" onclick="app.switchView('dashboard')">
+                    <div class="brand-icon-box">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <path d="M8 10l-4 8h16l-4-8"/>
+                            <path d="M9 10a3 3 0 0 1 6 0"/>
+                            <path d="M12 4v3"/>
+                            <path d="M10 4a2 2 0 1 1 4 0"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="brand-text">Ambliss_style</div>
+                    </div>
+                    <div class="live-badge-pulse" title="ระบบพร้อมยิงออเดอร์สดขณะ Live">
+                        <span class="pulse-dot"></span> LIVE POS
+                    </div>
+                </div>
+
+                <!-- Desktop Navigation Menu -->
+                <nav class="top-menu">
+                    <a class="nav-item active" onclick="app.switchView('dashboard')">📊 แดชบอร์ด</a>
+                    <a class="nav-item" onclick="app.switchView('live')">🎥 รอบ Live</a>
+                    <a class="nav-item" onclick="app.switchView('orders')">📦 ออเดอร์</a>
+                    <a class="nav-item" onclick="app.switchView('bags')">🛍️ ฝากถุง</a>
+                    <a class="nav-item" onclick="app.switchView('customers')">👥 ลูกค้า</a>
+                    <a class="nav-item" onclick="app.switchView('products')">👗 จัดการสินค้า</a>
+                    <a class="nav-item" onclick="app.switchView('shipping')">🚚 การจัดส่ง</a>
+                    <a class="nav-item" onclick="app.switchView('payments')">💵 การเงิน</a>
+                    <a class="nav-item" onclick="app.switchView('reports')">📈 รายงาน</a>
+                    <a class="nav-item" onclick="app.switchView('settings')">⚙️ ตั้งค่า</a>
+                </nav>
+
+                <!-- Topbar Actions -->
+                <div class="topbar-actions">
+                    <button class="btn btn-outline" onclick="app.refreshAllData()" title="รีเฟรชข้อมูลทั้งหมดจาก Google Sheets">
+                        <span>🔄</span> <span class="mobile-hide-col">รีเฟรช</span>
+                    </button>
+                    <!-- Mobile Drawer Toggle Button -->
+                    <button class="btn btn-outline mobile-only" onclick="app.toggleMobileDrawer()" style="padding:0.45rem 0.65rem;" title="เปิดเมนูทั้งหมด">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="3" y1="12" x2="21" y2="12"></line>
+                            <line x1="3" y1="6" x2="21" y2="6"></line>
+                            <line x1="3" y1="18" x2="21" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- MAIN CONTAINER -->
+        <div class="main-wrapper">
+            <main class="main-content">
+                <?!= include('View_Dashboard'); ?>
+                <?!= include('View_Products'); ?>
+                <?!= include('View_Live'); ?>
+                <?!= include('View_Customers'); ?>
+                <?!= include('View_Orders'); ?>
+                <?!= include('View_Bags'); ?>
+                <?!= include('View_Shipping'); ?>
+                <?!= include('View_Payments'); ?>
+                <?!= include('View_Reports'); ?>
+                <?!= include('View_Settings'); ?>
+            </main>
+
+            <!-- FOOTER STATUS BAR (PC Only) -->
+            <footer class="status-bar">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#10B981;"></span>
+                    <span style="font-weight:600; color:var(--text-main);">Google Sheets Cloud ERP เชื่อมต่อออนไลน์ 100%</span>
+                </div>
+                <div>
+                    <span id="status-record-summary">กำลังเชื่อมต่อ...</span> | 
+                    <span>อัปเดตล่าสุด: <span id="status-last-sync">-</span></span>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <!-- MOBILE STICKY BOTTOM DOCK (แถบเมนูด้านล่างบนมือถือ) -->
+    <div class="bottom-nav-dock">
+        <a class="bottom-nav-item active" onclick="app.switchView('dashboard')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+            <span>แดชบอร์ด</span>
+        </a>
+        <a class="bottom-nav-item" onclick="app.switchView('orders')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+            <span>ออเดอร์</span>
+        </a>
+        <!-- CENTER PROMINENT LIVE CF BUTTON -->
+        <div class="bottom-nav-center-btn" onclick="app.openLiveCF()" title="เปิดโหมดยิงออเดอร์สด CF ด่วน">
+            <span style="font-size:1.35rem; line-height:1;">⚡</span>
+            <span style="font-size:0.55rem; font-weight:800; letter-spacing:0.02em;">ยิงสด</span>
+        </div>
+        <a class="bottom-nav-item" onclick="app.switchView('bags')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v1"/><path d="M18 8h4a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-4"/><circle cx="8" cy="12" r="2"/></svg>
+            <span>ฝากถุง</span>
+        </a>
+        <a class="bottom-nav-item" onclick="app.toggleMobileDrawer()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            <span>เมนูอื่น</span>
+        </a>
+    </div>
+
+    <!-- MOBILE OFFCANVAS DRAWER -->
+    <div id="mobile-drawer-overlay" class="mobile-drawer-overlay" onclick="app.toggleMobileDrawer(false)"></div>
+    <div id="mobile-drawer" class="mobile-drawer">
+        <div class="drawer-header">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <div class="brand-icon-box" style="width:28px; height:28px;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M8 10l-4 8h16l-4-8"/></svg>
+                </div>
+                <div class="brand-text" style="font-size:1.05rem;">เมนูระบบทั้งหมด</div>
+            </div>
+            <button onclick="app.toggleMobileDrawer(false)" style="background:none; border:none; font-size:1.5rem; cursor:pointer; color:var(--text-muted);">&times;</button>
+        </div>
+        <div class="drawer-content">
+            <div class="drawer-item" onclick="app.switchView('dashboard'); app.toggleMobileDrawer(false)">📊 แดชบอร์ด & AI Analyst</div>
+            <div class="drawer-item" onclick="app.switchView('live'); app.toggleMobileDrawer(false)">🎥 รอบ Live สด (Sessions)</div>
+            <div class="drawer-item" onclick="app.switchView('orders'); app.toggleMobileDrawer(false)">📦 รายการคำสั่งซื้อ (Orders)</div>
+            <div class="drawer-item" onclick="app.switchView('bags'); app.toggleMobileDrawer(false)">🛍️ ตะกร้าและระบบฝากถุง (Bags)</div>
+            <div class="drawer-item" onclick="app.switchView('customers'); app.toggleMobileDrawer(false)">👥 ฐานข้อมูลลูกค้า (CRM)</div>
+            <div class="drawer-item" onclick="app.switchView('products'); app.toggleMobileDrawer(false)">👗 จัดการสินค้าและสต๊อก</div>
+            <div class="drawer-item" onclick="app.switchView('shipping'); app.toggleMobileDrawer(false)">🚚 ระบบจัดส่งและพิมพ์ใบปะหน้า</div>
+            <div class="drawer-item" onclick="app.switchView('payments'); app.toggleMobileDrawer(false)">💵 การเงินและตรวจสลิปโอน</div>
+            <div class="drawer-item" onclick="app.switchView('reports'); app.toggleMobileDrawer(false)">📈 สรุปรายงานการขาย</div>
+            <div class="drawer-item" onclick="app.switchView('settings'); app.toggleMobileDrawer(false)">⚙️ ตั้งค่าระบบ</div>
+            <div style="margin-top:auto; padding-top:1rem; border-top:1px solid var(--border-color); text-align:center;">
+                <button class="btn btn-primary" style="width:100%;" onclick="app.refreshAllData(); app.toggleMobileDrawer(false)">🔄 รีเฟรชข้อมูลสด</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

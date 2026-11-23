@@ -1,0 +1,305 @@
+<!-- 2. LIVE SESSIONS VIEW (รอบไลฟ์สด) -->
+<section id="view-live" class="view">
+    <div class="card-title-bar">
+        <div>
+            <h2 style="display:flex; align-items:center; gap:0.5rem; font-size:1.35rem; color:var(--text-main);">
+                🎥 สรุปรอบไลฟ์สด (TikTok Live Sessions)
+            </h2>
+            <p style="color:var(--text-muted); font-size:0.88rem; margin-top:2px;">
+                บันทึกยอดขาย คนดูสูงสุด และสถิติการสตรีมสด เชื่อมต่อ Google Sheets สด 100%
+            </p>
+        </div>
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <button class="btn btn-primary" onclick="app.switchView('orders')">⚡ เปิดแป้นยิงออเดอร์สด</button>
+            <button class="btn btn-outline" onclick="LiveModule.load(true)">🔄 รีเฟรชรอบไลฟ์</button>
+            <button class="btn btn-outline" onclick="LiveModule.openModal()">+ สร้างรอบไลฟ์ใหม่</button>
+        </div>
+    </div>
+
+    <!-- KPI Summary Cards -->
+    <div class="kpi-grid">
+        <div class="kpi-card kpi-pink">
+            <div class="kpi-label">💰 รายได้รวมจากไลฟ์</div>
+            <div id="live-kpi-revenue" class="kpi-value" style="color:var(--brand-pink);">฿0</div>
+        </div>
+        <div class="kpi-card kpi-amber">
+            <div class="kpi-label">📦 ขายได้สะสม (ชิ้น)</div>
+            <div id="live-kpi-items" class="kpi-value">0 ชิ้น</div>
+        </div>
+        <div class="kpi-card kpi-purple">
+            <div class="kpi-label">👥 คนดูเฉลี่ย (Peak)</div>
+            <div id="live-kpi-peak" class="kpi-value" style="color:var(--purple);">0 คน</div>
+        </div>
+        <div class="kpi-card kpi-green">
+            <div class="kpi-label">🎥 จำนวนรอบไลฟ์ทั้งหมด</div>
+            <div id="live-kpi-count" class="kpi-value" style="color:var(--success);">0 รอบ</div>
+        </div>
+    </div>
+
+    <!-- TABLE LIVE SESSIONS -->
+    <div class="card" style="padding:0; overflow:hidden;">
+        <div class="data-table-container">
+            <table class="custom-table">
+                <thead>
+                    <tr>
+                        <th style="width:95px;">รหัสไลฟ์</th>
+                        <th>วันที่ & เวลา</th>
+                        <th>ธีมไลฟ์ / แคมเปญ</th>
+                        <th style="text-align:right;">คนดูรวม</th>
+                        <th style="text-align:right;">Peak View</th>
+                        <th style="text-align:center;">ออเดอร์</th>
+                        <th style="text-align:center;">ขายได้ (ตัว)</th>
+                        <th style="text-align:right;">ยอดขายรวม</th>
+                        <th style="text-align:center; width:120px;">จัดการ</th>
+                    </tr>
+                </thead>
+                <tbody id="table-live-body">
+                    <tr><td colspan="9" style="text-align:center; padding:2rem; color:var(--text-muted);">กำลังโหลดข้อมูลรอบไลฟ์สดจาก Google Sheets... ⏳</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- MODAL LIVE SESSION (สร้าง/แก้ไขรอบไลฟ์) -->
+    <div id="modal-live" class="modal-overlay" style="display:none;">
+        <div class="modal-content-box">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border-color); padding-bottom:0.75rem; margin-bottom:1rem;">
+                <h3 id="modal-live-title" style="color:var(--text-main); margin:0; font-size:1.15rem;">สร้างรอบไลฟ์สดใหม่</h3>
+                <button type="button" style="background:none; border:none; font-size:1.5rem; cursor:pointer; color:var(--text-muted);" onclick="LiveModule.closeModal()">&times;</button>
+            </div>
+            
+            <form id="form-live" onsubmit="LiveModule.saveLive(event)">
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; margin-bottom:0.75rem;">
+                    <div><label style="font-size:0.8rem; font-weight:700;">รหัสรอบไลฟ์</label><input type="text" id="live-id" class="form-control" placeholder="เช่น L-001 (เว้นว่างเพื่อสร้างอัตโนมัติ)"></div>
+                    <div><label style="font-size:0.8rem; font-weight:700;">วันที่ไลฟ์</label><input type="date" id="live-date" class="form-control" required></div>
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.5rem; margin-bottom:0.75rem;">
+                    <div><label style="font-size:0.8rem; font-weight:700;">เวลาเริ่ม</label><input type="time" id="live-startTime" class="form-control" value="19:00"></div>
+                    <div><label style="font-size:0.8rem; font-weight:700;">เวลาจบ</label><input type="time" id="live-endTime" class="form-control" value="22:00"></div>
+                    <div><label style="font-size:0.8rem; font-weight:700;">ความยาว (นาที)</label><input type="number" id="live-duration" class="form-control" value="180"></div>
+                </div>
+
+                <div style="margin-bottom:0.75rem;">
+                    <label style="font-size:0.8rem; font-weight:700;">ธีมไลฟ์ / แคมเปญ</label>
+                    <input type="text" id="live-theme" class="form-control" required placeholder="เช่น เสื้อเชิ้ตงานวินเทจ 45฿ ทั้งราว / ลดกระหน่ำ">
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:0.5rem; margin-bottom:0.75rem;">
+                    <div><label style="font-size:0.78rem; font-weight:700;">คนดูรวม (Total)</label><input type="number" id="live-totalViews" class="form-control" value="0"></div>
+                    <div><label style="font-size:0.78rem; font-weight:700;">คนดูสูงสุด (Peak)</label><input type="number" id="live-peakViewer" class="form-control" value="0"></div>
+                    <div><label style="font-size:0.78rem; font-weight:700;">ยอดไลก์</label><input type="number" id="live-likes" class="form-control" value="0"></div>
+                    <div><label style="font-size:0.78rem; font-weight:700;">ผู้ติดตามใหม่</label><input type="number" id="live-newFollowers" class="form-control" value="0"></div>
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.5rem; margin-bottom:1.25rem;">
+                    <div><label style="font-size:0.78rem; font-weight:700;">จำนวนออเดอร์</label><input type="number" id="live-orders" class="form-control" value="0"></div>
+                    <div><label style="font-size:0.78rem; font-weight:700;">ชิ้นที่ขายได้ (ตัว)</label><input type="number" id="live-itemsSold" class="form-control" value="0"></div>
+                    <div><label style="font-size:0.78rem; font-weight:700; color:var(--brand-pink);">ยอดขายรวม (บาท)</label><input type="number" id="live-revenue" class="form-control" style="font-weight:800; color:var(--brand-pink);" value="0"></div>
+                </div>
+
+                <div style="display:flex; justify-content:flex-end; gap:0.5rem; border-top:1px solid var(--border-color); padding-top:1rem;">
+                    <button type="button" class="btn btn-outline" onclick="LiveModule.closeModal()">ยกเลิก</button>
+                    <button type="submit" id="btn-save-live" class="btn btn-primary">💾 บันทึกรอบไลฟ์ลง Google Sheets</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</section>
+
+
+<script>
+/**
+ * Live Sessions Controller - เชื่อมต่อ Google Sheets สด 100%
+ */
+var LiveModuleClass = window.LiveModuleClass || class LiveModuleClass {
+    constructor() {
+        this.allLives = [];
+    }
+
+    getId(l) {
+        if (!l) return '-';
+        return String(l['รหัสไลฟ์'] || l['id'] || Object.values(l)[0] || '-').trim();
+    }
+
+    load(forceRefresh = false) {
+        const tbody = document.getElementById('table-live-body');
+        if (!forceRefresh && this.allLives && this.allLives.length > 0) {
+            this.render();
+            return;
+        }
+
+        if (tbody) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:2rem; color:var(--text-muted);">กำลังโหลดข้อมูลรอบไลฟ์สดจาก Google Sheets... ⏳</td></tr>';
+
+        google.script.run
+            .withSuccessHandler((res) => {
+                this.allLives = (res && res.liveSessions) ? res.liveSessions : [];
+                this.render();
+            })
+            .withFailureHandler((err) => {
+                if (tbody) tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:2rem; color:var(--danger);">เกิดข้อผิดพลาดในการโหลด: ${err.message || err}</td></tr>`;
+            })
+            .getLiveSessionsData();
+    }
+
+    render() {
+        const tbody = document.getElementById('table-live-body');
+        if (!tbody) return;
+
+        // คำนวณสรุป KPI
+        let totalRev = 0, totalItems = 0, sumPeak = 0;
+        this.allLives.forEach(l => {
+            totalRev += Number(l['รายได้รวม (บาท)'] || l['revenue'] || 0);
+            totalItems += Number(l['ชิ้นที่ขายได้'] || l['itemsSold'] || 0);
+            sumPeak += Number(l['Peak Views'] || l['peakViewer'] || 0);
+        });
+        const avgPeak = this.allLives.length > 0 ? Math.round(sumPeak / this.allLives.length) : 0;
+
+        document.getElementById('live-kpi-revenue').textContent = `฿${totalRev.toLocaleString()}`;
+        document.getElementById('live-kpi-items').textContent = `${totalItems.toLocaleString()} ชิ้น`;
+        document.getElementById('live-kpi-peak').textContent = `${avgPeak.toLocaleString()} คน`;
+        document.getElementById('live-kpi-count').textContent = `${this.allLives.length} รอบ`;
+
+        if (this.allLives.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:2rem; color:var(--text-muted);">ยังไม่มีข้อมูลรอบไลฟ์สด (กดปุ่ม "+ สร้างรอบไลฟ์ใหม่" เพื่อเริ่มต้น)</td></tr>';
+            return;
+        }
+
+        let html = '';
+        this.allLives.forEach(l => {
+            const id = this.getId(l);
+            const date = l['วันที่'] || l['date'] || '-';
+            const start = l['เวลาเริ่ม'] || l['startTime'] || '-';
+            const end = l['เวลาจบ'] || l['endTime'] || '-';
+            const theme = l['ธีมไลฟ์'] || l['theme'] || '-';
+            const totalViews = Number(l['คนดูรวม'] || l['totalViews'] || 0);
+            const peak = Number(l['Peak Views'] || l['peakViewer'] || 0);
+            const orders = Number(l['จำนวนออเดอร์'] || l['orders'] || 0);
+            const sold = Number(l['ชิ้นที่ขายได้'] || l['itemsSold'] || 0);
+            const rev = Number(l['รายได้รวม (บาท)'] || l['revenue'] || 0);
+
+            html += `
+                <tr>
+                    <td style="font-weight:700; color:var(--brand-pink); font-family:monospace;">${id}</td>
+                    <td>
+                        <div style="font-weight:700; color:var(--text-main);">${date}</div>
+                        <small style="color:var(--text-muted);">${start} - ${end}</small>
+                    </td>
+                    <td style="font-weight:600; color:var(--text-main);">${theme}</td>
+                    <td style="text-align:right; color:var(--text-muted);">${totalViews.toLocaleString()}</td>
+                    <td style="text-align:right; font-weight:800; color:var(--purple);">${peak.toLocaleString()}</td>
+                    <td style="text-align:center; font-weight:700;">${orders}</td>
+                    <td style="text-align:center; font-weight:800; color:var(--brand-pink);">${sold}</td>
+                    <td style="text-align:right; font-weight:800; color:var(--text-main); font-size:0.95rem;">฿${rev.toLocaleString()}</td>
+                    <td style="text-align:center; white-space:nowrap;">
+                        <button class="btn btn-outline" style="padding:3px 7px; font-size:0.75rem; margin-right:3px;" onclick="LiveModule.editLive('${id}')">แก้ไข</button>
+                        <button class="btn btn-danger-light" style="padding:3px 7px; font-size:0.75rem;" onclick="LiveModule.deleteLive('${id}')">ลบ</button>
+                    </td>
+                </tr>
+            `;
+        });
+        tbody.innerHTML = html;
+    }
+
+    openModal(live = null) {
+        const modal = document.getElementById('modal-live');
+        if (!modal) return;
+        modal.style.display = 'flex';
+
+        if (live) {
+            const lId = this.getId(live);
+            document.getElementById('modal-live-title').textContent = `แก้ไขรอบไลฟ์: ${lId}`;
+            document.getElementById('live-id').value = lId;
+            document.getElementById('live-date').value = live['วันที่'] || live['date'] || '';
+            document.getElementById('live-startTime').value = live['เวลาเริ่ม'] || live['startTime'] || '19:00';
+            document.getElementById('live-endTime').value = live['เวลาจบ'] || live['endTime'] || '22:00';
+            document.getElementById('live-duration').value = live['ความยาว (นาที)'] || live['duration'] || 180;
+            document.getElementById('live-theme').value = live['ธีมไลฟ์'] || live['theme'] || '';
+            document.getElementById('live-totalViews').value = live['คนดูรวม'] || live['totalViews'] || 0;
+            document.getElementById('live-peakViewer').value = live['Peak Views'] || live['peakViewer'] || 0;
+            document.getElementById('live-likes').value = live['ยอดไลก์'] || live['likes'] || 0;
+            document.getElementById('live-newFollowers').value = live['ผู้ติดตามใหม่'] || live['newFollowers'] || 0;
+            document.getElementById('live-orders').value = live['จำนวนออเดอร์'] || live['orders'] || 0;
+            document.getElementById('live-itemsSold').value = live['ชิ้นที่ขายได้'] || live['itemsSold'] || 0;
+            document.getElementById('live-revenue').value = live['รายได้รวม (บาท)'] || live['revenue'] || 0;
+        } else {
+            document.getElementById('modal-live-title').textContent = 'สร้างรอบไลฟ์สดใหม่';
+            document.getElementById('form-live').reset();
+            document.getElementById('live-id').value = '';
+            document.getElementById('live-date').value = new Date().toISOString().split('T')[0];
+            document.getElementById('live-startTime').value = '19:00';
+            document.getElementById('live-endTime').value = '22:00';
+            document.getElementById('live-duration').value = '180';
+        }
+    }
+
+    closeModal() {
+        const modal = document.getElementById('modal-live');
+        if (modal) modal.style.display = 'none';
+    }
+
+    editLive(id) {
+        const l = this.allLives.find(x => this.getId(x) === id);
+        if (l) this.openModal(l);
+    }
+
+    deleteLive(id) {
+        if (!confirm(`ยืนยันการลบรอบไลฟ์ "${id}" หรือไม่?`)) return;
+        document.getElementById('loading-overlay').style.display = 'flex';
+        google.script.run
+            .withSuccessHandler(() => {
+                document.getElementById('loading-overlay').style.display = 'none';
+                if (window.app) app.showToast(`ลบรอบไลฟ์ ${id} สำเร็จ!`, 'warning');
+                LiveModule.load(true);
+            })
+            .withFailureHandler((err) => {
+                document.getElementById('loading-overlay').style.display = 'none';
+                alert('เกิดข้อผิดพลาด: ' + err.message);
+            })
+            .deleteLiveSessionFromSheet(id);
+    }
+
+    saveLive(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btn-save-live');
+        btn.disabled = true;
+        btn.textContent = 'กำลังบันทึกลง Google Sheets... ⏳';
+
+        const liveData = {
+            id: document.getElementById('live-id').value.trim(),
+            date: document.getElementById('live-date').value,
+            startTime: document.getElementById('live-startTime').value,
+            endTime: document.getElementById('live-endTime').value,
+            duration: Number(document.getElementById('live-duration').value) || 180,
+            theme: document.getElementById('live-theme').value.trim(),
+            totalViews: Number(document.getElementById('live-totalViews').value) || 0,
+            peakViewer: Number(document.getElementById('live-peakViewer').value) || 0,
+            likes: Number(document.getElementById('live-likes').value) || 0,
+            newFollowers: Number(document.getElementById('live-newFollowers').value) || 0,
+            orders: Number(document.getElementById('live-orders').value) || 0,
+            itemsSold: Number(document.getElementById('live-itemsSold').value) || 0,
+            revenue: Number(document.getElementById('live-revenue').value) || 0
+        };
+
+        google.script.run
+            .withSuccessHandler((res) => {
+                btn.disabled = false;
+                btn.textContent = '💾 บันทึกรอบไลฟ์ลง Google Sheets';
+                this.closeModal();
+                if (window.app) {
+                    app.playSuccessSound();
+                    app.showToast(`✅ บันทึกรอบไลฟ์ "${res.live.id}" สำเร็จเรียบร้อย!`, 'success');
+                }
+                LiveModule.load(true);
+            })
+            .withFailureHandler((err) => {
+                btn.disabled = false;
+                btn.textContent = '💾 บันทึกรอบไลฟ์ลง Google Sheets';
+                alert('❌ เกิดข้อผิดพลาดในการบันทึก: ' + err.message);
+            })
+            .saveLiveSessionToSheet(liveData);
+    }
+}
+
+window.LiveModule = new LiveModuleClass();
+</script>
